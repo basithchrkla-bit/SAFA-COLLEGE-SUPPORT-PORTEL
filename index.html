@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ml">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SAFA QURAN COLLEGE SUPPORT PORTAL</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f8f6;font-family:Arial,"Noto Sans Malayalam",sans-serif;color:#17221f}
+.wrap{max-width:1050px;margin:auto;padding:18px}.brand{background:#075b49;color:#fff;border-radius:18px;padding:22px;margin-bottom:18px}
+.brand h1{margin:0;font-size:22px}.brand p{margin:7px 0 0}.card{background:#fff;border-radius:16px;padding:20px;box-shadow:0 5px 18px #0001;margin-bottom:16px}
+.login{max-width:440px;margin:35px auto}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}
+.tile{background:#eef7f4;padding:18px;border-radius:14px}.tile h3{margin:0 0 8px}.btn{border:0;border-radius:10px;padding:11px 15px;background:#075b49;color:#fff;font-weight:700;cursor:pointer}
+.light{background:#e5f0ed;color:#075b49}.row{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
+label{font-weight:bold;display:block;margin:12px 0 6px}input,select,textarea{width:100%;padding:12px;border:1px solid #d6dfdc;border-radius:10px;font-size:15px}
+.hide{display:none}.bad{color:#b3261e}.pill{padding:7px 11px;border-radius:20px;background:#e5f4ef;color:#075b49;font-weight:bold}
+.small{font-size:13px;color:#687570}table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px solid #eee;text-align:left}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="brand"><h1>SAFA QURAN COLLEGE SUPPORT PORTAL</h1><p>Parent • Teacher • Super Admin</p></div>
+
+<div id="login" class="card login">
+<h2>Login / ലോഗിൻ</h2>
+<label>Login Type</label>
+<select id="type"><option value="parent">Parent / രക്ഷിതാവ്</option><option value="teacher">Teacher / ഉസ്താദ്</option><option value="admin">Super Admin</option></select>
+<label>Username / Student No.</label><input id="user" placeholder="ഉദാ: 1001">
+<label>Password</label><input id="pass" type="password">
+<button class="btn" onclick="doLogin()">Login</button>
+<p id="err" class="bad hide">Login വിവരങ്ങൾ ശരിയല്ല.</p>
+<p class="small">Demo: Parent 1001/1234 • Teacher ustad1/1234 • Admin admin/admin123</p>
+</div>
+
+<div id="app" class="hide">
+<div class="card"><div class="row"><div><h2 id="title">Dashboard</h2><div id="sub" class="small"></div></div><button class="btn" onclick="logout()">Logout</button></div></div>
+<div id="content"></div>
+</div>
+</div>
+
+<script>
+let role='';
+const $=id=>document.getElementById(id);
+function doLogin(){
+let t=$('type').value,u=$('user').value.trim(),p=$('pass').value;
+let ok=(t==='parent'&&u==='1001'&&p==='1234')||(t==='teacher'&&u==='ustad1'&&p==='1234')||(t==='admin'&&u==='admin'&&p==='admin123');
+$('err').classList.toggle('hide',ok);if(!ok)return;role=t;$('login').classList.add('hide');$('app').classList.remove('hide');render();
+}
+function logout(){location.reload()}
+function render(){if(role==='parent')parent();else if(role==='teacher')teacher();else admin()}
+function parent(){
+$('title').textContent='Parent Dashboard';$('sub').textContent='Shadi Burhan • Student No. 1001';
+$('content').innerHTML=`<div class="grid">
+<div class="tile"><h3>📅 Attendance</h3><p>September: <b>94%</b></p><button class="btn light" onclick="view('attendance')">View</button></div>
+<div class="tile"><h3>📖 Study Information</h3><p>Today's progress</p><button class="btn light" onclick="view('study')">View</button></div>
+<div class="tile"><h3>📨 Leave Apply</h3><p>Submit leave request</p><button class="btn light" onclick="view('leave')">Apply</button></div>
+<div class="tile"><h3>📝 Result</h3><p>Latest examination</p><button class="btn light" onclick="view('result')">View</button></div>
+<div class="tile"><h3>🔔 Notices</h3><p>College announcements</p><button class="btn light" onclick="view('notices')">View</button></div>
+<div class="tile"><h3>👤 Profile</h3><p>Student details</p><button class="btn light" onclick="view('profile')">View</button></div>
+</div><div id="detail"></div>`;
+}
+function view(x){
+let d=$('detail');let s={
+attendance:`<div class="card"><h3>📅 Attendance / ഹാജർ</h3><p>Monthly attendance: <span class="pill">94%</span></p><table><tr><th>Date</th><th>Status</th></tr><tr><td>13 Sep</td><td>Present</td></tr><tr><td>12 Sep</td><td>Present</td></tr><tr><td>11 Sep</td><td>Leave</td></tr></table></div>`,
+study:`<div class="card"><h3>📖 Study Information / പഠന വിവരം</h3><p><b>Today's lesson:</b> Hifz Revision</p><p><b>Progress:</b> Good</p><p><b>Teacher remark:</b> Continue revision regularly.</p></div>`,
+leave:`<div class="card"><h3>📨 Leave Apply / അവധി അപേക്ഷ</h3><label>Date</label><input type="date"><label>Reason / കാരണം</label><textarea rows="4"></textarea><button class="btn" onclick="alert('Demo: Leave application submitted')">Submit</button></div>`,
+result:`<div class="card"><h3>📝 Result / പരീക്ഷാ ഫലം</h3><table><tr><th>Exam</th><th>Mark</th><th>Grade</th></tr><tr><td>Monthly Test</td><td>267 / 300</td><td>A</td></tr></table></div>`,
+notices:`<div class="card"><h3>🔔 Notices</h3><p>• Monthly test schedule will be announced.</p><p>• College programme notice.</p></div>`,
+profile:`<div class="card"><h3>👤 Profile</h3><p>Name: <b>Shadi Burhan</b></p><p>Student No: <b>1001</b></p><p>Class: <b>Hifz</b></p></div>`
+};d.innerHTML=s[x];
+}
+function teacher(){
+$('title').textContent='Teacher Dashboard';$('sub').textContent='Ustad • ustad1';
+$('content').innerHTML=`<div class="grid">
+<div class="tile"><h3>👨‍🎓 My Students</h3><p>Assigned students</p></div>
+<div class="tile"><h3>📅 Attendance</h3><p>Mark / edit attendance</p></div>
+<div class="tile"><h3>📖 Study</h3><p>Update daily progress</p></div>
+<div class="tile"><h3>📨 Leave Requests</h3><p>Review requests</p></div></div>
+<div class="card"><h3>Assigned Students</h3><table><tr><th>Student No.</th><th>Name</th><th>Class</th></tr><tr><td>1001</td><td>Shadi Burhan</td><td>Hifz</td></tr></table></div>`;
+}
+function admin(){
+$('title').textContent='Super Admin Dashboard';$('sub').textContent='Full system management';
+$('content').innerHTML=`<div class="grid">
+<div class="tile"><h3>👨‍🎓 Students</h3><p>Add / edit students</p></div>
+<div class="tile"><h3>👨‍🏫 Teachers</h3><p>Create teacher accounts</p></div>
+<div class="tile"><h3>🔗 Assignments</h3><p>Teacher → Students</p></div>
+<div class="tile"><h3>📅 Attendance</h3><p>Manage attendance</p></div>
+<div class="tile"><h3>📖 Study</h3><p>Manage study records</p></div>
+<div class="tile"><h3>📨 Leave</h3><p>Approve / reject</p></div>
+<div class="tile"><h3>📝 Results</h3><p>Enter marks</p></div>
+<div class="tile"><h3>🔔 Notices</h3><p>Publish notices</p></div></div>`;
+}
+</script>
+</body>
+</html>
