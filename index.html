@@ -1,16 +1,68 @@
-<!doctype html><html><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SAFA QURAN COLLEGE SUPPORT PORTAL</title><link rel="stylesheet" href="style.css"></head>
-<body><div class="wrap"><header><h1>SAFA QURAN COLLEGE SUPPORT PORTAL</h1><p>സഫ ഖുർആൻ കോളേജ്</p></header>
-<section id="login" class="card"><h2>Login / ലോഗിൻ</h2>
-<input id="email" placeholder="Email"><input id="password" type="password" placeholder="Password">
-<button id="loginBtn">Login</button><p id="msg"></p></section>
-<section id="dash" class="card hidden"><div class="top"><h2>Dashboard</h2><button id="logout">Logout</button></div>
-<p id="user"></p><div id="admin" class="hidden"><h3>Super Admin</h3>
-<div class="grid"><button onclick="check('students')">Students</button><button onclick="check('teachers')">Teachers</button>
-<button onclick="check('attendance')">Attendance</button><button onclick="check('studyRecords')">Study</button>
-<button onclick="check('leaveRequests')">Leave</button><button onclick="check('results')">Results</button>
-<button onclick="check('notices')">Notices</button><button onclick="check('users')">Users</button></div><p id="info"></p></div>
-<div id="parent" class="hidden"><h3>Parent / രക്ഷിതാവ്</h3><p>Parent dashboard will be connected next.</p></div>
-<div id="teacher" class="hidden"><h3>Teacher / അധ്യാപകൻ</h3><p>Teacher dashboard will be connected next.</p></div>
-</section></div><script type="module" src="app.js"></script></body></html>
+<!doctype html>
+<html lang="ml">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SAFA QURAN COLLEGE SUPPORT PORTAL</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>SAFA QURAN COLLEGE SUPPORT PORTAL</h1>
+  <p>സഫ ഖുർആൻ കോളേജ്</p>
+</header>
+
+<section id="login" class="card">
+  <h2>Login / ലോഗിൻ</h2>
+  <input id="email" type="email" placeholder="Email">
+  <input id="password" type="password" placeholder="Password">
+  <button id="loginBtn">Login</button>
+  <p id="msg" class="msg"></p>
+</section>
+
+<section id="dash" class="card hidden">
+  <div class="top">
+    <div>
+      <h2 id="dashTitle">Dashboard</h2>
+      <p id="user" class="muted"></p>
+    </div>
+    <button id="logout" class="secondary">Logout</button>
+  </div>
+
+  <div id="admin" class="hidden">
+    <h3>Super Admin / സൂപ്പർ അഡ്മിൻ</h3>
+    <div class="grid">
+      <button data-section="students">👨‍🎓 Students</button>
+      <button data-section="teachers">👨‍🏫 Teachers</button>
+      <button data-section="attendance">📅 Attendance</button>
+      <button data-section="studyRecords">📖 Study</button>
+      <button data-section="leaveRequests">📝 Leave</button>
+      <button data-section="results">🏆 Results</button>
+      <button data-section="notices">📢 Notices</button>
+      <button data-section="users">🔐 Users</button>
+    </div>
+
+    <div id="panel" class="panel hidden">
+      <div class="panel-head">
+        <h3 id="panelTitle"></h3>
+        <button id="closePanel" class="secondary">Close</button>
+      </div>
+      <div id="panelBody"></div>
+    </div>
+  </div>
+
+  <div id="parent" class="hidden">
+    <h3>Parent / രക്ഷിതാവ്</h3>
+    <p>Parent dashboard connection will be added after the student records are configured.</p>
+  </div>
+
+  <div id="teacher" class="hidden">
+    <h3>Teacher / അധ്യാപകൻ</h3>
+    <p>Teacher dashboard connection will be added after teacher assignments are configured.</p>
+  </div>
+</section>
+</div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
