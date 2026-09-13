@@ -1,6 +1,6 @@
 import {initializeApp} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
 import {getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-import {getFirestore, doc, getDoc, collection, getDocs, addDoc, deleteDoc} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+import {getFirestore, doc, getDoc, collection, getDocs, addDoc, updateDoc, deleteDoc} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 import {firebaseConfig} from "./firebase-config.js";
 
 const app=initializeApp(firebaseConfig);
@@ -36,11 +36,7 @@ onAuthStateChanged(auth,async u=>{
     const keys=Object.keys(data);
     const rawRole=data["role"];
     const role=typeof rawRole==="string"?rawRole.trim().toLowerCase():String(rawRole??"").trim().toLowerCase();
-
-    $("debug").classList.remove("hidden");
-    $("debug").textContent="Firestore keys: "+JSON.stringify(keys)+"\nRaw document: "+JSON.stringify(data);
-
-    if(role==="admin"){
+if(role==="admin"){
       $("status").textContent="✅ Role detected: admin";
       $("dashTitle").textContent="Super Admin Dashboard";
       $("admin").classList.remove("hidden");
@@ -62,19 +58,158 @@ onAuthStateChanged(auth,async u=>{
 });
 
 const labels={students:"Students / വിദ്യാർത്ഥികൾ",teachers:"Teachers / അധ്യാപകർ",attendance:"Attendance / ഹാജർ",studyRecords:"Study / പഠന പുരോഗതി",leaveRequests:"Leave / ലീവ്",results:"Results / റിസൾട്ട്",notices:"Notices / അറിയിപ്പുകൾ",users:"Users / അക്കൗണ്ടുകൾ"};
-async function getAll(name){const s=await getDocs(collection(db,name));return s.docs.map(d=>({id:d.id,...d.data()}));}
+
+async function getAll(name){
+  const s=await getDocs(collection(db,name));
+  return s.docs.map(d=>({id:d.id,...d.data()}));
+}
+
 async function openSection(name){
-  $("panel").classList.remove("hidden");$("panelTitle").textContent=labels[name]||name;$("panelBody").innerHTML="<p>Loading...</p>";
+  $("panel").classList.remove("hidden");
+  $("panelTitle").textContent=labels[name]||name;
+  $("panelBody").innerHTML="<p>Loading...</p>";
   try{
     const rows=await getAll(name);
-    $("panelBody").innerHTML=rows.length?tableHtml(rows,Object.keys(rows[0]).filter(k=>k!=="id").slice(0,6),name):"<div class='empty'>No records yet.</div>";
-  }catch(e){$("panelBody").innerHTML="<p class='msg'>Error: "+escapeHtml(e.message||e.code)+"</p>";}
+    if(name==="students"){renderStudents(rows);return;}
+    $("panelBody").innerHTML=rows.length
+      ? tableHtml(rows,Object.keys(rows[0]).filter(k=>k!=="id").slice(0,6),name)
+      : "<div class='empty'>No records yet.</div>";
+  }catch(e){
+    $("panelBody").innerHTML="<p class='msg'>Error: "+escapeHtml(e.message||e.code)+"</p>";
+  }
 }
+
+function renderStudents(rows){
+  const data=[...rows].sort((a,b)=>String(a.studentNumber||"").localeCompare(String(b.studentNumber||"")));
+  let h=`
+    <div class="studentTools">
+      <input id="studentSearch" placeholder="🔍 Search student number or name">
+      <button id="addStudentBtn" class="primary">➕ Add Student</button>
+    </div>
+    <div id="studentForm" class="formbox hidden"></div>
+    <div id="studentList"></div>`;
+  $("panelBody").innerHTML=h;
+  const search=$("studentSearch");
+  const draw=()=>{
+    const q=search.value.trim().toLowerCase();
+    const filtered=data.filter(r=>
+      String(r.studentNumber||"").toLowerCase().includes(q) ||
+      String(r.name||"").toLowerCase().includes(q));
+    $("studentList").innerHTML=filtered.length
+      ? studentsTable(filtered)
+      : "<div class='empty'>No students found.</div>";
+    bindStudentActions();
+  };
+  search.oninput=draw;
+  $("addStudentBtn").onclick=()=>showStudentForm();
+  draw();
+}
+
+function studentsTable(rows){
+  let h=`<div class="tablewrap"><table><thead><tr>
+    <th>Student No.</th><th>Name</th><th>Parent</th><th>Class / Batch</th><th>Phone</th><th>Teacher</th><th>Status</th><th>Action</th>
+  </tr></thead><tbody>`;
+  for(const r of rows){
+    h+=`<tr>
+      <td>${escapeHtml(r.studentNumber)}</td>
+      <td>${escapeHtml(r.name)}</td>
+      <td>${escapeHtml(r.parentName)}</td>
+      <td>${escapeHtml(r.classBatch)}</td>
+      <td>${escapeHtml(r.phone)}</td>
+      <td>${escapeHtml(r.assignedTeacher)}</td>
+      <td>${escapeHtml(r.status||"Active")}</td>
+      <td class="actions">
+        <button class="smallbtn" data-edit-student="${escapeHtml(r.id)}">Edit</button>
+        <button class="smallbtn danger" data-delete-student="${escapeHtml(r.id)}">Delete</button>
+      </td>
+    </tr>`;
+  }
+  return h+"</tbody></table></div>";
+}
+
+function showStudentForm(student=null){
+  const f=$("studentForm");
+  f.classList.remove("hidden");
+  f.innerHTML=`
+    <h4>${student?"✏️ Edit Student":"➕ Add Student"}</h4>
+    <div class="formgrid">
+      <div><label>Student Number / വിദ്യാർത്ഥി നമ്പർ</label><input id="sNo" value="${escapeAttr(student?.studentNumber)}" placeholder="e.g. 1001"></div>
+      <div><label>Student Name / പേര്</label><input id="sName" value="${escapeAttr(student?.name)}" placeholder="Student name"></div>
+      <div><label>Parent Name / രക്ഷിതാവിന്റെ പേര്</label><input id="sParent" value="${escapeAttr(student?.parentName)}" placeholder="Parent name"></div>
+      <div><label>Class / Batch</label><input id="sClass" value="${escapeAttr(student?.classBatch)}" placeholder="e.g. Hifz 1"></div>
+      <div><label>Phone Number / ഫോൺ</label><input id="sPhone" value="${escapeAttr(student?.phone)}" placeholder="Phone number"></div>
+      <div><label>Assigned Teacher / അധ്യാപകൻ</label><input id="sTeacher" value="${escapeAttr(student?.assignedTeacher)}" placeholder="Teacher name"></div>
+      <div><label>Address / വിലാസം</label><textarea id="sAddress" placeholder="Address">${escapeHtml(student?.address)}</textarea></div>
+      <div><label>Date of Birth / ജനനത്തീയതി</label><input id="sDob" type="date" value="${escapeAttr(student?.dateOfBirth)}"></div>
+      <div><label>Admission Date / പ്രവേശന തീയതി</label><input id="sAdmission" type="date" value="${escapeAttr(student?.admissionDate)}"></div>
+      <div><label>Status / നിലവാരം</label><select id="sStatus"><option value="Active" ${(student?.status||"Active")==="Active"?"selected":""}>Active / സജീവം</option><option value="Inactive" ${student?.status==="Inactive"?"selected":""}>Inactive / നിർജ്ജീവം</option></select></div>
+    </div>
+    <div class="formactions">
+      <button id="saveStudent" class="primary">${student?"Save Changes":"Save Student"}</button>
+      <button id="cancelStudent">Cancel</button>
+    </div>
+    <div id="studentFormMsg" class="msg"></div>`;
+  $("cancelStudent").onclick=()=>f.classList.add("hidden");
+  $("saveStudent").onclick=async()=>{
+    const payload={
+      studentNumber:$("sNo").value.trim(),
+      name:$("sName").value.trim(),
+      parentName:$("sParent").value.trim(),
+      classBatch:$("sClass").value.trim(),
+      phone:$("sPhone").value.trim(),
+      assignedTeacher:$("sTeacher").value.trim(),
+      address:$("sAddress").value.trim(),
+      dateOfBirth:$("sDob").value,
+      admissionDate:$("sAdmission").value,
+      status:$("sStatus").value,
+      updatedAt:new Date().toISOString()
+    };
+    if(!payload.studentNumber||!payload.name){
+      $("studentFormMsg").textContent="Student Number and Name are required.";
+      return;
+    }
+    $("saveStudent").disabled=true;
+    try{
+      if(student){
+        await updateDoc(doc(db,"students",student.id),payload);
+      }else{
+        await addDoc(collection(db,"students"),{...payload,createdAt:new Date().toISOString()});
+      }
+      await openSection("students");
+    }catch(e){
+      $("studentFormMsg").textContent="Save failed: "+(e.code||e.message);
+      $("saveStudent").disabled=false;
+    }
+  };
+}
+
+function bindStudentActions(){
+  document.querySelectorAll("[data-edit-student]").forEach(b=>b.onclick=async()=>{
+    const snap=await getDoc(doc(db,"students",b.dataset.editStudent));
+    if(snap.exists()) showStudentForm({id:snap.id,...snap.data()});
+  });
+  document.querySelectorAll("[data-delete-student]").forEach(b=>b.onclick=async()=>{
+    if(!confirm("Delete this student?"))return;
+    try{
+      await deleteDoc(doc(db,"students",b.dataset.deleteStudent));
+      await openSection("students");
+    }catch(e){
+      alert("Delete failed: "+(e.code||e.message));
+    }
+  });
+}
+
 function escapeHtml(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
+function escapeAttr(v){return escapeHtml(v).replace(/`/g,"&#096;");}
+
 function tableHtml(rows,fields,collectionName){
- let h="<table><thead><tr>"+fields.map(f=>`<th>${escapeHtml(f)}</th>`).join("")+"<th>Action</th></tr></thead><tbody>";
+ let h="<div class='tablewrap'><table><thead><tr>"+fields.map(f=>`<th>${escapeHtml(f)}</th>`).join("")+"<th>Action</th></tr></thead><tbody>";
  for(const r of rows)h+="<tr>"+fields.map(f=>`<td>${escapeHtml(r[f])}</td>`).join("")+`<td><button class="smallbtn" data-del="${escapeHtml(r.id)}">Delete</button></td></tr>`;
- h+="</tbody></table>";
- setTimeout(()=>document.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{if(!confirm("Delete this record?"))return;await deleteDoc(doc(db,collectionName,b.dataset.del));await openSection(collectionName);}),0);
+ h+="</tbody></table></div>";
+ setTimeout(()=>document.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{
+   if(!confirm("Delete this record?"))return;
+   await deleteDoc(doc(db,collectionName,b.dataset.del));
+   await openSection(collectionName);
+ }),0);
  return h;
 }
