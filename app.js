@@ -6,6 +6,8 @@ import {
   getDoc,
   collection,
   getDocs,
+  query,
+  where,
   addDoc,
   updateDoc,
   deleteDoc
@@ -308,34 +310,52 @@ function showAttendanceForm(rec=null){
 
 // Parent portal
 async function renderParentDashboard(userData){
-  const studentNumber=String(userData.studentNumber||"").trim();
+  const linkedNumber=String(userData.studentNumber||"").trim();
   const body=$("parentBody");
-  if(!studentNumber){ body.innerHTML=`<div class="empty">Student Number is not linked to this parent account.<br>Ask the Super Admin to set <b>studentNumber</b> in your users document.</div>`; return; }
-  body.innerHTML=`<div class="parentTools"><div><b>Student Number / വിദ്യാർത്ഥി നമ്പർ:</b> ${escapeHtml(studentNumber)}</div><button id="refreshParent" class="primary">🔄 Refresh</button></div><div id="parentContent">Loading...</div>`;
-  $("refreshParent").onclick=()=>renderParentDashboard(userData);
+  body.innerHTML=`<div class="parentTools"><div><b>Parent Portal / രക്ഷിതാക്കളുടെ പോർട്ടൽ</b><div style="margin-top:6px">Student Number / വിദ്യാർത്ഥി നമ്പർ</div></div><div style="display:flex;gap:8px;flex-wrap:wrap"><input id="parentStudentNo" placeholder="Enter Student Number" value="${escapeAttr(linkedNumber)}"><button id="parentLookupBtn" class="primary">🔍 View Details</button></div><div id="parentLookupMsg" class="msg"></div></div><div id="parentContent"><div class="empty">Enter your child's Student Number to view details.</div></div>`;
+  $("parentLookupBtn").onclick=()=>loadParentStudent(userData,$("parentStudentNo").value.trim());
+  if(linkedNumber) await loadParentStudent(userData,linkedNumber);
+}
+
+async function loadParentStudent(userData, studentNumber){
+  const content=$("parentContent"), msg=$("parentLookupMsg");
+  if(!studentNumber){msg.textContent="Student Number is required.";return;}
+  msg.textContent=""; content.innerHTML="<p>Loading...</p>";
   try{
+    const linked=String(userData.studentNumber||"").trim();
+    if(linked && linked!==studentNumber){content.innerHTML=`<div class="empty">This Student Number is not linked to this parent account.</div>`;return;}
     const [ss,att,study,res,notices,leaves]=await Promise.all([
-      getDocs(collection(db,"students")),getDocs(collection(db,"attendance")),getDocs(collection(db,"studyRecords")),getDocs(collection(db,"results")),getDocs(collection(db,"notices")),getDocs(collection(db,"leaveRequests"))
+      getDocs(query(collection(db,"students"),where("studentNumber","==",studentNumber))),
+      getDocs(query(collection(db,"attendance"),where("studentNumber","==",studentNumber))),
+      getDocs(query(collection(db,"studyRecords"),where("studentNumber","==",studentNumber))),
+      getDocs(query(collection(db,"results"),where("studentNumber","==",studentNumber))),
+      getDocs(collection(db,"notices")),
+      getDocs(query(collection(db,"leaveRequests"),where("studentNumber","==",studentNumber)))
     ]);
-    const student=ss.docs.map(d=>({id:d.id,...d.data()})).find(x=>String(x.studentNumber||"").trim()===studentNumber);
-    const own=x=>String(x.studentNumber||x.studentId||"").trim()===studentNumber;
-    const A=att.docs.map(d=>({id:d.id,...d.data()})).filter(own).sort((a,b)=>String(b.date||"").localeCompare(String(a.date||""))).slice(0,15);
-    const S=study.docs.map(d=>({id:d.id,...d.data()})).filter(own);
-    const R=res.docs.map(d=>({id:d.id,...d.data()})).filter(own);
+    const studentSnap=ss.docs[0];
+    const student=studentSnap?{id:studentSnap.id,...studentSnap.data()}:null;
+    if(!student){content.innerHTML=`<div class="empty">Student Number <b>${escapeHtml(studentNumber)}</b> not found.</div>`;return;}
+    const A=att.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>String(b.date||"").localeCompare(String(a.date||""))).slice(0,15);
+    const S=study.docs.map(d=>({id:d.id,...d.data()}));
+    const R=res.docs.map(d=>({id:d.id,...d.data()}));
     const N=notices.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||""))).slice(0,10);
-    const L=leaves.docs.map(d=>({id:d.id,...d.data()})).filter(own).sort((a,b)=>String(b.appliedAt||"").localeCompare(String(a.appliedAt||"")));
-    if(!student){body.querySelector('#parentContent').innerHTML=`<div class="empty">Student Number <b>${escapeHtml(studentNumber)}</b> not found.</div>`;return;}
-    body.querySelector('#parentContent').innerHTML=`
-      <div class="parentCards">
-        <div class="pcard"><h4>👤 Profile / വ്യക്തിഗത വിവരങ്ങൾ</h4><p><b>Name:</b> ${escapeHtml(student.name)}</p><p><b>Parent:</b> ${escapeHtml(student.parentName)}</p><p><b>Class:</b> ${escapeHtml(student.classBatch)}</p><p><b>Phone:</b> ${escapeHtml(student.phone)}</p><p><b>Teacher:</b> ${escapeHtml(student.assignedTeacher)}</p><p><b>Status:</b> ${escapeHtml(student.status||"Active")}</p></div>
-        <div class="pcard"><h4>📅 Attendance / ഹാജർ</h4>${A.length?tableHtml(A,["date","status","remarks"],"attendance"):"<p>No attendance records.</p>"}</div>
-        <div class="pcard"><h4>📖 Study / പഠന പുരോഗതി</h4>${S.length?tableHtml(S,Object.keys(S[0]).filter(k=>k!=="id").slice(0,6),"studyRecords"):"<p>No study records.</p>"}</div>
-        <div class="pcard"><h4>🏆 Results / റിസൾട്ട്</h4>${R.length?tableHtml(R,Object.keys(R[0]).filter(k=>k!=="id").slice(0,6),"results"):"<p>No results yet.</p>"}</div>
-        <div class="pcard"><h4>📢 Notices / അറിയിപ്പുകൾ</h4>${N.length?N.map(n=>`<div class="notice"><b>${escapeHtml(n.title||"Notice")}</b><div>${escapeHtml(n.message||n.text||"")}</div></div>`).join(""):"<p>No notices.</p>"}</div>
-        <div class="pcard"><h4>📝 Leave / ലീവ്</h4><button id="applyLeaveBtn" class="primary">➕ Apply Leave / ലീവ് അപേക്ഷിക്കുക</button><div id="leaveFormWrap" class="formbox hidden"></div><div class="tablewrap"><table><thead><tr><th>From</th><th>To</th><th>Reason</th><th>Status</th><th>Review</th></tr></thead><tbody>${L.length?L.map(x=>`<tr><td>${escapeHtml(x.fromDate)}</td><td>${escapeHtml(x.toDate)}</td><td>${escapeHtml(x.reason)}</td><td><b>${escapeHtml(x.status||"Pending")}</b></td><td>${escapeHtml(x.reviewRemark||"")}</td></tr>`).join(""):"<tr><td colspan='5'>No leave requests yet.</td></tr>"}</tbody></table></div></div>
-      </div>`;
+    const L=leaves.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>String(b.appliedAt||"").localeCompare(String(a.appliedAt||"")));
+    content.innerHTML=`<div class="parentCards">
+      <div class="pcard"><h4>👤 Profile / വ്യക്തിഗത വിവരങ്ങൾ</h4><p><b>Student No:</b> ${escapeHtml(student.studentNumber)}</p><p><b>Name:</b> ${escapeHtml(student.name)}</p><p><b>Parent:</b> ${escapeHtml(student.parentName)}</p><p><b>Class:</b> ${escapeHtml(student.classBatch)}</p><p><b>Phone:</b> ${escapeHtml(student.phone)}</p><p><b>Teacher:</b> ${escapeHtml(student.assignedTeacher)}</p><p><b>Address:</b> ${escapeHtml(student.address)}</p><p><b>Date of Birth:</b> ${escapeHtml(student.dateOfBirth)}</p><p><b>Admission Date:</b> ${escapeHtml(student.admissionDate)}</p><p><b>Status:</b> ${escapeHtml(student.status||"Active")}</p></div>
+      <div class="pcard"><h4>📅 Attendance / ഹാജർ</h4>${A.length?readOnlyTableHtml(A,["date","status","remarks"]):"<p>No attendance records.</p>"}</div>
+      <div class="pcard"><h4>📖 Study / പഠന പുരോഗതി</h4>${S.length?readOnlyTableHtml(S,Object.keys(S[0]).filter(k=>k!=="id").slice(0,6)):"<p>No study records.</p>"}</div>
+      <div class="pcard"><h4>🏆 Results / റിസൾട്ട്</h4>${R.length?readOnlyTableHtml(R,Object.keys(R[0]).filter(k=>k!=="id").slice(0,6)):"<p>No results yet.</p>"}</div>
+      <div class="pcard"><h4>📢 Notices / അറിയിപ്പുകൾ</h4>${N.length?N.map(n=>`<div class="notice"><b>${escapeHtml(n.title||"Notice")}</b><div>${escapeHtml(n.message||n.text||"")}</div></div>`).join(""):"<p>No notices.</p>"}</div>
+      <div class="pcard"><h4>📝 Leave / ലീവ്</h4><button id="applyLeaveBtn" class="primary">➕ Apply Leave / ലീവ് അപേക്ഷിക്കുക</button><div id="leaveFormWrap" class="formbox hidden"></div><div class="tablewrap"><table><thead><tr><th>From</th><th>To</th><th>Reason</th><th>Status</th><th>Review</th></tr></thead><tbody>${L.length?L.map(x=>`<tr><td>${escapeHtml(x.fromDate)}</td><td>${escapeHtml(x.toDate)}</td><td>${escapeHtml(x.reason)}</td><td><b>${escapeHtml(x.status||"Pending")}</b></td><td>${escapeHtml(x.reviewRemark||"")}</td></tr>`).join(""):"<tr><td colspan='5'>No leave requests yet.</td></tr>"}</tbody></table></div></div>
+    </div>`;
     $("applyLeaveBtn").onclick=()=>showParentLeaveForm(studentNumber,student.name);
-  }catch(e){body.querySelector('#parentContent').innerHTML=`<div class="msg">Could not load parent data: ${escapeHtml(e.code||e.message)}</div>`;}
+  }catch(e){console.error(e);content.innerHTML=`<div class="msg">Could not load parent data: ${escapeHtml(e.code||e.message)}</div>`;}
+}
+
+function readOnlyTableHtml(rows,fields){
+  let h="<div class='tablewrap'><table><thead><tr>"+fields.map(f=>`<th>${escapeHtml(f)}</th>`).join("")+"</tr></thead><tbody>";
+  for(const r of rows) h+="<tr>"+fields.map(f=>`<td>${escapeHtml(r[f])}</td>`).join("")+"</tr>";
+  return h+"</tbody></table></div>";
 }
 
 function showParentLeaveForm(studentNumber,studentName){
