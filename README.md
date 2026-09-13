@@ -1,23 +1,16 @@
-# SAFA QURAN COLLEGE SUPPORT PORTAL V4
+# SAFA QURAN COLLEGE SUPPORT PORTAL – V6
 
-Firebase project: `safa-hifz-class`
+V6 is a Firebase-connected diagnostic/admin build.
 
-Admin login:
-- Email: `basithchrkla@gmail.com`
-- Password: the password currently set in Firebase Authentication.
+## Important
+The portal authenticates with Firebase Authentication and then reads:
+`users/{SIGNED_IN_UID}`
+The field `role` must be exactly `admin`, `parent`, or `teacher`.
 
-V4 adds a real Super Admin dashboard connected to Firestore:
-- Students: add/delete
-- Teachers: add/delete
-- Notices: publish/delete
-- Attendance, Study, Leave, Results: record counters/data viewer
-- Users: data viewer
+V6 now displays the signed-in UID on the dashboard. This makes it easy to detect if the Firestore `users` document was created under a different UID after an email/account change.
 
-IMPORTANT:
-1. Firebase Authentication must have the admin user.
-2. Firestore must contain `users/{ADMIN_UID}` with `role: "admin"`.
-3. Replace the GitHub files with this V4 package.
-4. Before entering real student data, review and publish the Firestore rules.
-5. Creating Firebase Authentication accounts for parents/teachers should be done through a secure admin workflow; do not expose privileged Firebase credentials in browser code.
+Admin example:
+- Email: basithchrkla@gmail.com
+- Password: your current Firebase Authentication password
 
-This is a development build. Parent/teacher full screens and account creation are the next implementation stage.
+Do not share passwords. Do not put real student data into this development build until Firestore rules and all parent/teacher flows are reviewed.
