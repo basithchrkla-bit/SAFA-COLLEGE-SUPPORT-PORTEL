@@ -1,4 +1,5 @@
-import {initializeApp} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+
 import {
   getAuth,
   signInWithEmailAndPassword,
@@ -19,7 +20,12 @@ import {
   deleteDoc
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
-import {firebaseConfig} from "./firebase-config.js";
+import { firebaseConfig } from "./firebase-config.js";
+
+
+/* =========================
+   FIREBASE
+========================= */
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -29,106 +35,209 @@ const $ = id => document.getElementById(id);
 
 
 /* =========================
-   LOGIN
+   HELPERS
 ========================= */
 
-$("loginBtn").onclick = async () => {
-  $("msg").textContent = "";
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
 
-  try {
-    await signInWithEmailAndPassword(
-      auth,
-      $("email").value.trim(),
-      $("password").value
-    );
-  } catch (e) {
-    $("msg").textContent =
-      "Login failed: " + (e.code || e.message);
-  }
-};
+function escapeAttr(value) {
+  return escapeHtml(value);
+}
+
+function show(id) {
+  $(id)?.classList.remove("hidden");
+}
+
+function hide(id) {
+  $(id)?.classList.add("hidden");
+}
 
 
 /* =========================
-   LOGOUT / PANEL
+   LOGIN
 ========================= */
 
-$("logout").onclick = () => signOut(auth);
+$("loginBtn")?.addEventListener("click", async () => {
 
-$("closePanel").onclick = () =>
-  $("panel").classList.add("hidden");
+  const email = $("email")?.value.trim() || "";
+  const password = $("password")?.value || "";
 
-document.querySelectorAll("[data-section]").forEach(btn => {
-  btn.addEventListener("click", () => {
-    openSection(btn.dataset.section);
-  });
+  if ($("msg")) $("msg").textContent = "";
+
+  if (!email || !password) {
+    if ($("msg")) {
+      $("msg").textContent =
+        "Email and password are required.";
+    }
+    return;
+  }
+
+  $("loginBtn").disabled = true;
+  $("loginBtn").textContent = "Logging in...";
+
+  try {
+
+    await signInWithEmailAndPassword(
+      auth,
+      email,
+      password
+    );
+
+  } catch (e) {
+
+    console.error(e);
+
+    if ($("msg")) {
+      $("msg").textContent =
+        "Login failed: " +
+        (e.code || e.message);
+    }
+
+  } finally {
+
+    $("loginBtn").disabled = false;
+    $("loginBtn").textContent = "Login";
+  }
 });
 
 
 /* =========================
-   AUTH + ROLE
+   LOGOUT
+========================= */
+
+$("logout")?.addEventListener("click", async () => {
+
+  try {
+    await signOut(auth);
+  } catch (e) {
+    console.error(e);
+  }
+
+});
+
+
+/* =========================
+   CLOSE PANEL
+========================= */
+
+$("closePanel")?.addEventListener("click", () => {
+  hide("panel");
+});
+
+
+/* =========================
+   MENU BUTTONS
+========================= */
+
+document
+  .querySelectorAll("[data-section]")
+  .forEach(button => {
+
+    button.addEventListener("click", () => {
+
+      const section =
+        button.dataset.section;
+
+      openSection(section);
+    });
+
+  });
+
+
+/* =========================
+   AUTH STATE
 ========================= */
 
 onAuthStateChanged(auth, async user => {
 
   if (!user) {
-    $("login").classList.remove("hidden");
-    $("dash").classList.add("hidden");
+
+    show("login");
+    hide("dash");
+    hide("admin");
+    hide("parent");
+    hide("teacher");
+    hide("panel");
+
     return;
   }
 
-  $("login").classList.add("hidden");
-  $("dash").classList.remove("hidden");
 
-  $("admin").classList.add("hidden");
-  $("parent").classList.add("hidden");
-  $("teacher").classList.add("hidden");
-  $("panel").classList.add("hidden");
+  hide("login");
+  show("dash");
 
-  $("user").textContent = user.email || "";
+  hide("admin");
+  hide("parent");
+  hide("teacher");
+  hide("panel");
 
-  $("uid").textContent =
-    "Signed-in UID: " + user.uid;
 
-  $("status").textContent =
-    "Reading users/" + user.uid + " …";
+  if ($("user")) {
+    $("user").textContent =
+      user.email || "";
+  }
+
+
+  if ($("uid")) {
+    $("uid").textContent =
+      "Signed-in UID: " + user.uid;
+  }
+
+
+  if ($("status")) {
+    $("status").textContent =
+      "Reading users/" +
+      user.uid +
+      " …";
+  }
+
 
   try {
 
-    /*
-      IMPORTANT:
-      Firebase Authentication UID is used
-      directly as Firestore users document ID.
-    */
+    const userRef =
+      doc(
+        db,
+        "users",
+        user.uid
+      );
 
-    const userRef = doc(db, "users", user.uid);
+    const userSnap =
+      await getDoc(userRef);
 
-    const userSnap = await getDoc(userRef);
 
     if (!userSnap.exists()) {
 
       $("status").innerHTML =
         "⚠️ users document not found.<br>" +
         "<small>Expected document ID:</small><br>" +
-        "<b>" + escapeHtml(user.uid) + "</b>";
+        "<b>" +
+        escapeHtml(user.uid) +
+        "</b>";
 
       return;
     }
 
-    const userData = userSnap.data() || {};
 
-    const rawRole = userData.role;
+    const userData =
+      userSnap.data() || {};
+
 
     const role =
-      typeof rawRole === "string"
-        ? rawRole.trim().toLowerCase()
-        : String(rawRole ?? "")
-            .trim()
-            .toLowerCase();
+      String(
+        userData.role || ""
+      )
+      .trim()
+      .toLowerCase();
 
 
-    /* =========================
-       ADMIN
-    ========================= */
+    /* ADMIN */
 
     if (role === "admin") {
 
@@ -138,15 +247,13 @@ onAuthStateChanged(auth, async user => {
       $("dashTitle").textContent =
         "Super Admin Dashboard";
 
-      $("admin").classList.remove("hidden");
+      show("admin");
 
       return;
     }
 
 
-    /* =========================
-       PARENT
-    ========================= */
+    /* PARENT */
 
     if (role === "parent") {
 
@@ -156,17 +263,17 @@ onAuthStateChanged(auth, async user => {
       $("dashTitle").textContent =
         "Parent Dashboard";
 
-      $("parent").classList.remove("hidden");
+      show("parent");
 
-      await renderParentDashboard(userData);
+      await renderParentDashboard(
+        userData
+      );
 
       return;
     }
 
 
-    /* =========================
-       TEACHER
-    ========================= */
+    /* TEACHER */
 
     if (role === "teacher") {
 
@@ -176,14 +283,16 @@ onAuthStateChanged(auth, async user => {
       $("dashTitle").textContent =
         "Teacher Dashboard";
 
-      $("teacher").classList.remove("hidden");
+      show("teacher");
 
       return;
     }
 
 
     $("status").textContent =
-      "⚠️ Unknown role: " + (role || "EMPTY");
+      "⚠️ Unknown role: " +
+      (role || "EMPTY");
+
 
   } catch (e) {
 
@@ -191,24 +300,44 @@ onAuthStateChanged(auth, async user => {
 
     $("status").innerHTML =
       "⚠️ Firestore error:<br>" +
-      escapeHtml(e.code || e.message);
+      escapeHtml(
+        e.code || e.message
+      );
   }
+
 });
 
 
 /* =========================
-   COLLECTION LABELS
+   LABELS
 ========================= */
 
 const labels = {
-  students: "Students / വിദ്യാർത്ഥികൾ",
-  teachers: "Teachers / അധ്യാപകർ",
-  attendance: "Attendance / ഹാജർ",
-  studyRecords: "Study / പഠന പുരോഗതി",
-  leaveRequests: "Leave / ലീവ്",
-  results: "Results / റിസൾട്ട്",
-  notices: "Notices / അറിയിപ്പുകൾ",
-  users: "Users / അക്കൗണ്ടുകൾ"
+
+  students:
+    "Students / വിദ്യാർത്ഥികൾ",
+
+  teachers:
+    "Teachers / അധ്യാപകർ",
+
+  attendance:
+    "Attendance / ഹാജർ",
+
+  studyRecords:
+    "Study / പഠന പുരോഗതി",
+
+  leaveRequests:
+    "Leave / ലീവ്",
+
+  results:
+    "Results / റിസൾട്ട്",
+
+  notices:
+    "Notices / അറിയിപ്പുകൾ",
+
+  users:
+    "Users / അക്കൗണ്ടുകൾ"
+
 };
 
 
@@ -219,22 +348,25 @@ const labels = {
 async function getAll(name) {
 
   const snap =
-    await getDocs(collection(db, name));
+    await getDocs(
+      collection(db, name)
+    );
 
   return snap.docs.map(d => ({
     id: d.id,
     ...d.data()
   }));
+
 }
 
 
 /* =========================
-   OPEN ADMIN SECTION
+   OPEN SECTION
 ========================= */
 
 async function openSection(name) {
 
-  $("panel").classList.remove("hidden");
+  show("panel");
 
   $("panelTitle").textContent =
     labels[name] || name;
@@ -242,29 +374,42 @@ async function openSection(name) {
   $("panelBody").innerHTML =
     "<p>Loading...</p>";
 
+
   try {
 
-    const rows = await getAll(name);
+    const rows =
+      await getAll(name);
+
 
     if (name === "students") {
       renderStudents(rows);
       return;
     }
 
+
     if (name === "teachers") {
       renderTeachers(rows);
       return;
     }
+
 
     if (name === "attendance") {
       renderAttendance(rows);
       return;
     }
 
+
     if (name === "leaveRequests") {
       renderLeaveRequests(rows);
       return;
     }
+
+
+    if (name === "notices") {
+      renderNotices(rows);
+      return;
+    }
+
 
     $("panelBody").innerHTML =
       rows.length
@@ -272,18 +417,22 @@ async function openSection(name) {
             rows,
             Object.keys(rows[0])
               .filter(k => k !== "id")
-              .slice(0, 6),
-            name
+              .slice(0, 8)
           )
         : "<div class='empty'>No records yet.</div>";
+
 
   } catch (e) {
 
     $("panelBody").innerHTML =
       "<p class='msg'>Error: " +
-      escapeHtml(e.message || e.code) +
+      escapeHtml(
+        e.code || e.message
+      ) +
       "</p>";
+
   }
+
 }
 
 
@@ -293,113 +442,176 @@ async function openSection(name) {
 
 function renderStudents(rows) {
 
-  const data = [...rows].sort(
-    (a, b) =>
-      String(a.studentNumber || "")
-        .localeCompare(String(b.studentNumber || ""))
-  );
+  const data =
+    [...rows].sort(
+      (a, b) =>
+        String(
+          a.studentNumber || ""
+        ).localeCompare(
+          String(
+            b.studentNumber || ""
+          )
+        )
+    );
+
 
   $("panelBody").innerHTML = `
+
     <div class="studentTools">
+
       <input
         id="studentSearch"
         placeholder="🔍 Search student number or name"
       >
 
-      <button id="addStudentBtn" class="primary">
+      <button
+        id="addStudentBtn"
+        class="primary"
+      >
         ➕ Add Student
       </button>
+
     </div>
 
-    <div id="studentForm" class="formbox hidden"></div>
+    <div
+      id="studentForm"
+      class="formbox hidden"
+    ></div>
 
     <div id="studentList"></div>
+
   `;
 
-  const search = $("studentSearch");
 
   const draw = () => {
 
-    const q =
-      search.value.trim().toLowerCase();
+    const text =
+      $("studentSearch")
+        .value
+        .trim()
+        .toLowerCase();
 
-    const filtered = data.filter(r =>
-      String(r.studentNumber || "")
+
+    const filtered =
+      data.filter(r =>
+
+        String(
+          r.studentNumber || ""
+        )
         .toLowerCase()
-        .includes(q) ||
-      String(r.name || "")
+        .includes(text)
+
+        ||
+
+        String(
+          r.name || ""
+        )
         .toLowerCase()
-        .includes(q)
-    );
+        .includes(text)
+
+      );
+
 
     $("studentList").innerHTML =
       filtered.length
         ? studentsTable(filtered)
         : "<div class='empty'>No students found.</div>";
 
+
     bindStudentActions();
+
   };
 
-  search.oninput = draw;
+
+  $("studentSearch").oninput =
+    draw;
+
 
   $("addStudentBtn").onclick =
     () => showStudentForm();
 
+
   draw();
+
 }
 
 
 function studentsTable(rows) {
 
-  let h = `
+  let html = `
+
     <div class="tablewrap">
-    <table>
-      <thead>
-        <tr>
-          <th>Student No.</th>
-          <th>Name</th>
-          <th>Parent</th>
-          <th>Class / Batch</th>
-          <th>Phone</th>
-          <th>Teacher</th>
-          <th>Status</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody>
+
+      <table>
+
+        <thead>
+
+          <tr>
+            <th>Student No.</th>
+            <th>Name</th>
+            <th>Parent</th>
+            <th>Class</th>
+            <th>Phone</th>
+            <th>Teacher</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+
+        </thead>
+
+        <tbody>
+
   `;
 
-  for (const r of rows) {
 
-    h += `
+  rows.forEach(r => {
+
+    html += `
+
       <tr>
 
-        <td>${escapeHtml(r.studentNumber)}</td>
+        <td>
+          ${escapeHtml(r.studentNumber)}
+        </td>
 
-        <td>${escapeHtml(r.name)}</td>
+        <td>
+          ${escapeHtml(r.name)}
+        </td>
 
-        <td>${escapeHtml(r.parentName)}</td>
+        <td>
+          ${escapeHtml(r.parentName)}
+        </td>
 
-        <td>${escapeHtml(r.classBatch)}</td>
+        <td>
+          ${escapeHtml(r.classBatch)}
+        </td>
 
-        <td>${escapeHtml(r.phone)}</td>
+        <td>
+          ${escapeHtml(r.phone)}
+        </td>
 
-        <td>${escapeHtml(r.assignedTeacher)}</td>
+        <td>
+          ${escapeHtml(r.assignedTeacher)}
+        </td>
 
-        <td>${escapeHtml(r.status || "Active")}</td>
+        <td>
+          ${escapeHtml(
+            r.status || "Active"
+          )}
+        </td>
 
         <td class="actions">
 
           <button
             class="smallbtn"
-            data-edit-student="${escapeHtml(r.id)}"
+            data-edit-student="${escapeAttr(r.id)}"
           >
             Edit
           </button>
 
           <button
             class="smallbtn danger"
-            data-delete-student="${escapeHtml(r.id)}"
+            data-delete-student="${escapeAttr(r.id)}"
           >
             Delete
           </button>
@@ -407,130 +619,234 @@ function studentsTable(rows) {
         </td>
 
       </tr>
-    `;
-  }
 
-  return h + `
-      </tbody>
-    </table>
+    `;
+
+  });
+
+
+  html += `
+
+        </tbody>
+
+      </table>
+
     </div>
+
   `;
+
+
+  return html;
+
 }
 
 
+/* =========================
+   STUDENT FORM
+========================= */
+
 function showStudentForm(student = null) {
 
-  const f = $("studentForm");
+  const f =
+    $("studentForm");
 
-  f.classList.remove("hidden");
+  show("studentForm");
+
 
   f.innerHTML = `
+
     <h4>
-      ${student ? "✏️ Edit Student" : "➕ Add Student"}
+      ${
+        student
+          ? "✏️ Edit Student"
+          : "➕ Add Student"
+      }
     </h4>
+
 
     <div class="formgrid">
 
+
       <div>
-        <label>Student Number / വിദ്യാർത്ഥി നമ്പർ</label>
+        <label>
+          Student Number / വിദ്യാർത്ഥി നമ്പർ
+        </label>
+
         <input
           id="sNo"
-          value="${escapeAttr(student?.studentNumber)}"
+          value="${escapeAttr(
+            student?.studentNumber
+          )}"
           placeholder="e.g. 131"
         >
       </div>
 
+
       <div>
-        <label>Student Name / പേര്</label>
+        <label>
+          Student Name / പേര്
+        </label>
+
         <input
           id="sName"
-          value="${escapeAttr(student?.name)}"
+          value="${escapeAttr(
+            student?.name
+          )}"
         >
       </div>
 
+
       <div>
-        <label>Parent Name / രക്ഷിതാവിന്റെ പേര്</label>
+        <label>
+          Parent Name / രക്ഷിതാവ്
+        </label>
+
         <input
           id="sParent"
-          value="${escapeAttr(student?.parentName)}"
+          value="${escapeAttr(
+            student?.parentName
+          )}"
         >
       </div>
 
+
       <div>
-        <label>Class / Batch</label>
+        <label>
+          Class / Batch
+        </label>
+
         <input
           id="sClass"
-          value="${escapeAttr(student?.classBatch)}"
+          value="${escapeAttr(
+            student?.classBatch
+          )}"
         >
       </div>
 
+
       <div>
-        <label>Phone Number / ഫോൺ</label>
+        <label>
+          Phone Number / ഫോൺ
+        </label>
+
         <input
           id="sPhone"
-          value="${escapeAttr(student?.phone)}"
+          value="${escapeAttr(
+            student?.phone
+          )}"
         >
       </div>
 
+
       <div>
-        <label>Assigned Teacher / അധ്യാപകൻ</label>
+        <label>
+          Assigned Teacher / അധ്യാപകൻ
+        </label>
+
         <input
           id="sTeacher"
-          value="${escapeAttr(student?.assignedTeacher)}"
+          value="${escapeAttr(
+            student?.assignedTeacher
+          )}"
         >
       </div>
 
-      <div>
-        <label>Address / വിലാസം</label>
-        <textarea id="sAddress">${escapeHtml(student?.address)}</textarea>
-      </div>
 
       <div>
-        <label>Date of Birth / ജനനത്തീയതി</label>
+
+        <label>
+          Address / വിലാസം
+        </label>
+
+        <textarea id="sAddress">
+${escapeHtml(student?.address)}
+        </textarea>
+
+      </div>
+
+
+      <div>
+
+        <label>
+          Date of Birth / ജനനത്തീയതി
+        </label>
+
         <input
           id="sDob"
           type="date"
-          value="${escapeAttr(student?.dateOfBirth)}"
+          value="${escapeAttr(
+            student?.dateOfBirth
+          )}"
         >
+
       </div>
 
+
       <div>
-        <label>Admission Date / പ്രവേശന തീയതി</label>
+
+        <label>
+          Admission Date / പ്രവേശന തീയതി
+        </label>
+
         <input
           id="sAdmission"
           type="date"
-          value="${escapeAttr(student?.admissionDate)}"
+          value="${escapeAttr(
+            student?.admissionDate
+          )}"
         >
+
       </div>
 
+
       <div>
+
         <label>Status / നിലവാരം</label>
 
         <select id="sStatus">
 
           <option
             value="Active"
-            ${(student?.status || "Active") === "Active" ? "selected" : ""}
+            ${
+              (student?.status ||
+              "Active") === "Active"
+                ? "selected"
+                : ""
+            }
           >
             Active / സജീവം
           </option>
 
           <option
             value="Inactive"
-            ${student?.status === "Inactive" ? "selected" : ""}
+            ${
+              student?.status === "Inactive"
+                ? "selected"
+                : ""
+            }
           >
             Inactive / നിർജ്ജീവം
           </option>
 
         </select>
+
       </div>
+
 
     </div>
 
+
     <div class="formactions">
 
-      <button id="saveStudent" class="primary">
-        ${student ? "Save Changes" : "Save Student"}
+      <button
+        id="saveStudent"
+        class="primary"
+      >
+        ${
+          student
+            ? "Save Changes"
+            : "Save Student"
+        }
       </button>
 
       <button id="cancelStudent">
@@ -539,149 +855,658 @@ function showStudentForm(student = null) {
 
     </div>
 
-    <div id="studentFormMsg" class="msg"></div>
+
+    <div
+      id="studentFormMsg"
+      class="msg"
+    ></div>
+
   `;
 
+
   $("cancelStudent").onclick =
-    () => f.classList.add("hidden");
+    () => hide("studentForm");
 
-  $("saveStudent").onclick = async () => {
 
-    const payload = {
+  $("saveStudent").onclick =
+    async () => {
 
-      studentNumber:
-        $("sNo").value.trim(),
+      const payload = {
 
-      name:
-        $("sName").value.trim(),
+        studentNumber:
+          $("sNo").value.trim(),
 
-      parentName:
-        $("sParent").value.trim(),
+        name:
+          $("sName").value.trim(),
 
-      classBatch:
-        $("sClass").value.trim(),
+        parentName:
+          $("sParent").value.trim(),
 
-      phone:
-        $("sPhone").value.trim(),
+        classBatch:
+          $("sClass").value.trim(),
 
-      assignedTeacher:
-        $("sTeacher").value.trim(),
+        phone:
+          $("sPhone").value.trim(),
 
-      address:
-        $("sAddress").value.trim(),
+        assignedTeacher:
+          $("sTeacher").value.trim(),
 
-      dateOfBirth:
-        $("sDob").value,
+        address:
+          $("sAddress").value.trim(),
 
-      admissionDate:
-        $("sAdmission").value,
+        dateOfBirth:
+          $("sDob").value,
 
-      status:
-        $("sStatus").value,
+        admissionDate:
+          $("sAdmission").value,
 
-      updatedAt:
-        new Date().toISOString()
-    };
+        status:
+          $("sStatus").value,
 
-    if (!payload.studentNumber || !payload.name) {
+        updatedAt:
+          new Date().toISOString()
 
-      $("studentFormMsg").textContent =
-        "Student Number and Name are required.";
+      };
 
-      return;
-    }
 
-    $("saveStudent").disabled = true;
+      if (
+        !payload.studentNumber ||
+        !payload.name
+      ) {
 
-    try {
+        $("studentFormMsg").textContent =
+          "Student Number and Name are required.";
 
-      if (student) {
-
-        await updateDoc(
-          doc(db, "students", student.id),
-          payload
-        );
-
-      } else {
-
-        await addDoc(
-          collection(db, "students"),
-          {
-            ...payload,
-            createdAt:
-              new Date().toISOString()
-          }
-        );
+        return;
       }
 
-      await openSection("students");
 
-    } catch (e) {
+      try {
 
-      $("studentFormMsg").textContent =
-        "Save failed: " +
-        (e.code || e.message);
+        $("saveStudent").disabled =
+          true;
 
-      $("saveStudent").disabled = false;
-    }
-  };
+
+        if (student?.id) {
+
+          await updateDoc(
+            doc(
+              db,
+              "students",
+              student.id
+            ),
+            payload
+          );
+
+        } else {
+
+          await addDoc(
+            collection(
+              db,
+              "students"
+            ),
+            {
+              ...payload,
+              createdAt:
+                new Date().toISOString()
+            }
+          );
+
+        }
+
+
+        await openSection(
+          "students"
+        );
+
+
+      } catch (e) {
+
+        $("studentFormMsg").textContent =
+          "Save failed: " +
+          (e.code || e.message);
+
+        $("saveStudent").disabled =
+          false;
+      }
+
+    };
+
 }
 
 
 function bindStudentActions() {
 
   document
-    .querySelectorAll("[data-edit-student]")
-    .forEach(b => {
+    .querySelectorAll(
+      "[data-edit-student]"
+    )
+    .forEach(button => {
 
-      b.onclick = async () => {
+      button.onclick =
+        async () => {
 
-        const snap =
-          await getDoc(
-            doc(db, "students", b.dataset.editStudent)
-          );
+          const snap =
+            await getDoc(
+              doc(
+                db,
+                "students",
+                button.dataset
+                  .editStudent
+              )
+            );
 
-        if (snap.exists()) {
 
-          showStudentForm({
-            id: snap.id,
-            ...snap.data()
-          });
-        }
-      };
+          if (snap.exists()) {
+
+            showStudentForm({
+              id: snap.id,
+              ...snap.data()
+            });
+
+          }
+
+        };
+
     });
 
 
   document
-    .querySelectorAll("[data-delete-student]")
-    .forEach(b => {
+    .querySelectorAll(
+      "[data-delete-student]"
+    )
+    .forEach(button => {
 
-      b.onclick = async () => {
+      button.onclick =
+        async () => {
 
-        if (!confirm("Delete this student?"))
-          return;
+          if (
+            !confirm(
+              "Delete this student?"
+            )
+          ) return;
 
-        try {
+
+          try {
+
+            await deleteDoc(
+              doc(
+                db,
+                "students",
+                button.dataset
+                  .deleteStudent
+              )
+            );
+
+
+            await openSection(
+              "students"
+            );
+
+          } catch (e) {
+
+            alert(
+              "Delete failed: " +
+              (e.code || e.message)
+            );
+
+          }
+
+        };
+
+    });
+
+}
+
+
+/* =========================
+   TEACHERS
+========================= */
+
+function renderTeachers(rows) {
+
+  $("panelBody").innerHTML = `
+
+    <div class="studentTools">
+
+      <input
+        id="teacherSearch"
+        placeholder="🔍 Search teacher"
+      >
+
+      <button
+        id="addTeacherBtn"
+        class="primary"
+      >
+        ➕ Add Teacher
+      </button>
+
+    </div>
+
+    <div
+      id="teacherForm"
+      class="formbox hidden"
+    ></div>
+
+    <div id="teacherList"></div>
+
+  `;
+
+
+  const draw = () => {
+
+    const q =
+      $("teacherSearch")
+        .value
+        .trim()
+        .toLowerCase();
+
+
+    const filtered =
+      rows.filter(r =>
+
+        String(r.name || "")
+          .toLowerCase()
+          .includes(q)
+
+        ||
+
+        String(r.phone || "")
+          .toLowerCase()
+          .includes(q)
+
+        ||
+
+        String(r.email || "")
+          .toLowerCase()
+          .includes(q)
+
+      );
+
+
+    $("teacherList").innerHTML =
+      filtered.length
+        ? teacherTable(filtered)
+        : "<div class='empty'>No teachers found.</div>";
+
+
+    bindTeacherActions();
+
+  };
+
+
+  $("teacherSearch").oninput =
+    draw;
+
+
+  $("addTeacherBtn").onclick =
+    () => showTeacherForm();
+
+
+  draw();
+
+}
+
+
+function teacherTable(rows) {
+
+  let html = `
+
+    <div class="tablewrap">
+
+      <table>
+
+        <thead>
+
+          <tr>
+            <th>Name</th>
+            <th>Phone</th>
+            <th>Email</th>
+            <th>Subject</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+
+        </thead>
+
+        <tbody>
+
+  `;
+
+
+  rows.forEach(r => {
+
+    html += `
+
+      <tr>
+
+        <td>${escapeHtml(r.name)}</td>
+
+        <td>${escapeHtml(r.phone)}</td>
+
+        <td>${escapeHtml(r.email)}</td>
+
+        <td>${escapeHtml(r.subject)}</td>
+
+        <td>
+          ${escapeHtml(
+            r.status || "Active"
+          )}
+        </td>
+
+        <td>
+
+          <button
+            class="smallbtn"
+            data-edit-teacher="${escapeAttr(r.id)}"
+          >
+            Edit
+          </button>
+
+          <button
+            class="smallbtn danger"
+            data-delete-teacher="${escapeAttr(r.id)}"
+          >
+            Delete
+          </button>
+
+        </td>
+
+      </tr>
+
+    `;
+
+  });
+
+
+  return html +
+    "</tbody></table></div>";
+
+}
+
+
+function showTeacherForm(teacher = null) {
+
+  const f =
+    $("teacherForm");
+
+  show("teacherForm");
+
+
+  f.innerHTML = `
+
+    <h4>
+      ${
+        teacher
+          ? "✏️ Edit Teacher"
+          : "➕ Add Teacher"
+      }
+    </h4>
+
+
+    <div class="formgrid">
+
+      <div>
+        <label>Name / പേര്</label>
+        <input
+          id="tName"
+          value="${escapeAttr(
+            teacher?.name
+          )}"
+        >
+      </div>
+
+      <div>
+        <label>Phone / ഫോൺ</label>
+        <input
+          id="tPhone"
+          value="${escapeAttr(
+            teacher?.phone
+          )}"
+        >
+      </div>
+
+      <div>
+        <label>Email</label>
+        <input
+          id="tEmail"
+          type="email"
+          value="${escapeAttr(
+            teacher?.email
+          )}"
+        >
+      </div>
+
+      <div>
+        <label>Subject / വിഷയം</label>
+        <input
+          id="tSubject"
+          value="${escapeAttr(
+            teacher?.subject
+          )}"
+        >
+      </div>
+
+      <div>
+
+        <label>Status</label>
+
+        <select id="tStatus">
+
+          <option
+            value="Active"
+            ${
+              (teacher?.status ||
+              "Active") === "Active"
+                ? "selected"
+                : ""
+            }
+          >
+            Active
+          </option>
+
+          <option
+            value="Inactive"
+            ${
+              teacher?.status === "Inactive"
+                ? "selected"
+                : ""
+            }
+          >
+            Inactive
+          </option>
+
+        </select>
+
+      </div>
+
+    </div>
+
+
+    <div class="formactions">
+
+      <button
+        id="saveTeacher"
+        class="primary"
+      >
+        ${
+          teacher
+            ? "Save Changes"
+            : "Save Teacher"
+        }
+      </button>
+
+      <button id="cancelTeacher">
+        Cancel
+      </button>
+
+    </div>
+
+
+    <div
+      id="teacherFormMsg"
+      class="msg"
+    ></div>
+
+  `;
+
+
+  $("cancelTeacher").onclick =
+    () => hide("teacherForm");
+
+
+  $("saveTeacher").onclick =
+    async () => {
+
+      const payload = {
+
+        name:
+          $("tName").value.trim(),
+
+        phone:
+          $("tPhone").value.trim(),
+
+        email:
+          $("tEmail").value.trim(),
+
+        subject:
+          $("tSubject").value.trim(),
+
+        status:
+          $("tStatus").value,
+
+        updatedAt:
+          new Date().toISOString()
+
+      };
+
+
+      if (!payload.name) {
+
+        $("teacherFormMsg").textContent =
+          "Teacher name is required.";
+
+        return;
+      }
+
+
+      try {
+
+        if (teacher?.id) {
+
+          await updateDoc(
+            doc(
+              db,
+              "teachers",
+              teacher.id
+            ),
+            payload
+          );
+
+        } else {
+
+          await addDoc(
+            collection(
+              db,
+              "teachers"
+            ),
+            {
+              ...payload,
+              createdAt:
+                new Date().toISOString()
+            }
+          );
+
+        }
+
+
+        await openSection(
+          "teachers"
+        );
+
+      } catch (e) {
+
+        $("teacherFormMsg").textContent =
+          "Save failed: " +
+          (e.code || e.message);
+
+      }
+
+    };
+
+}
+
+
+function bindTeacherActions() {
+
+  document
+    .querySelectorAll(
+      "[data-edit-teacher]"
+    )
+    .forEach(button => {
+
+      button.onclick =
+        async () => {
+
+          const snap =
+            await getDoc(
+              doc(
+                db,
+                "teachers",
+                button.dataset
+                  .editTeacher
+              )
+            );
+
+
+          if (snap.exists()) {
+
+            showTeacherForm({
+              id: snap.id,
+              ...snap.data()
+            });
+
+          }
+
+        };
+
+    });
+
+
+  document
+    .querySelectorAll(
+      "[data-delete-teacher]"
+    )
+    .forEach(button => {
+
+      button.onclick =
+        async () => {
+
+          if (
+            !confirm(
+              "Delete this teacher?"
+            )
+          ) return;
+
 
           await deleteDoc(
             doc(
               db,
-              "students",
-              b.dataset.deleteStudent
+              "teachers",
+              button.dataset
+                .deleteTeacher
             )
           );
 
-          await openSection("students");
 
-        } catch (e) {
-
-          alert(
-            "Delete failed: " +
-            (e.code || e.message)
+          await openSection(
+            "teachers"
           );
-        }
-      };
+
+        };
+
     });
+
 }
 
 
@@ -692,15 +1517,13 @@ function bindStudentActions() {
 function renderAttendance(rows) {
 
   const today =
-    new Date().toISOString().slice(0, 10);
+    new Date()
+      .toISOString()
+      .slice(0, 10);
 
-  const data = [...rows].sort(
-    (a, b) =>
-      String(b.date || "")
-        .localeCompare(String(a.date || ""))
-  );
 
   $("panelBody").innerHTML = `
+
     <div class="studentTools">
 
       <input
@@ -723,16 +1546,21 @@ function renderAttendance(rows) {
 
     </div>
 
+
     <div
       id="attendanceForm"
       class="formbox hidden"
     ></div>
 
-    <div class="tablewrap">
+
+    <div
+      class="tablewrap"
+    >
 
       <table>
 
         <thead>
+
           <tr>
             <th>Date</th>
             <th>Student No.</th>
@@ -741,14 +1569,19 @@ function renderAttendance(rows) {
             <th>Remarks</th>
             <th>Action</th>
           </tr>
+
         </thead>
 
-        <tbody id="attendanceList"></tbody>
+        <tbody
+          id="attendanceList"
+        ></tbody>
 
       </table>
 
     </div>
+
   `;
+
 
   const draw = () => {
 
@@ -758,60 +1591,76 @@ function renderAttendance(rows) {
         .trim()
         .toLowerCase();
 
-    const d =
+
+    const date =
       $("attendanceDate").value;
 
-    const filtered =
-      data.filter(r =>
 
-        (!d || r.date === d) &&
+    const filtered =
+      rows.filter(r =>
+
+        (!date ||
+          r.date === date)
+
+        &&
 
         (
           !q ||
 
-          String(r.studentNumber || "")
-            .toLowerCase()
-            .includes(q) ||
+          String(
+            r.studentNumber || ""
+          )
+          .toLowerCase()
+          .includes(q)
+
+          ||
 
           String(
             r.studentName ||
             r.name ||
             ""
           )
-            .toLowerCase()
-            .includes(q)
+          .toLowerCase()
+          .includes(q)
         )
+
       );
+
 
     $("attendanceList").innerHTML =
       filtered.length
 
         ? filtered.map(r => `
+
             <tr>
 
-              <td>${escapeHtml(r.date || "")}</td>
+              <td>
+                ${escapeHtml(r.date)}
+              </td>
 
               <td>
                 ${escapeHtml(
                   r.studentNumber ||
-                  r.studentId ||
-                  ""
+                  r.studentId
                 )}
               </td>
 
               <td>
                 ${escapeHtml(
                   r.studentName ||
-                  r.name ||
-                  ""
+                  r.name
                 )}
               </td>
 
-              <td>${escapeHtml(r.status || "")}</td>
+              <td>
+                ${escapeHtml(r.status)}
+              </td>
 
-              <td>${escapeHtml(r.remarks || "")}</td>
+              <td>
+                ${escapeHtml(r.remarks)}
+              </td>
 
-              <td class="actions">
+              <td>
 
                 <button
                   class="smallbtn"
@@ -830,72 +1679,99 @@ function renderAttendance(rows) {
               </td>
 
             </tr>
+
           `).join("")
 
         : `
+
           <tr>
+
             <td colspan="6">
               No attendance records for this date.
             </td>
+
           </tr>
+
         `;
 
 
     document
-      .querySelectorAll("[data-edit-att]")
-      .forEach(b => {
+      .querySelectorAll(
+        "[data-edit-att]"
+      )
+      .forEach(button => {
 
-        b.onclick = async () => {
+        button.onclick =
+          async () => {
 
-          const s =
-            await getDoc(
-              doc(
-                db,
-                "attendance",
-                b.dataset.editAtt
-              )
-            );
+            const snap =
+              await getDoc(
+                doc(
+                  db,
+                  "attendance",
+                  button.dataset
+                    .editAtt
+                )
+              );
 
-          if (s.exists()) {
 
-            showAttendanceForm({
-              id: s.id,
-              ...s.data()
-            });
-          }
-        };
+            if (snap.exists()) {
+
+              showAttendanceForm({
+                id: snap.id,
+                ...snap.data()
+              });
+
+            }
+
+          };
+
       });
 
 
     document
-      .querySelectorAll("[data-delete-att]")
-      .forEach(b => {
+      .querySelectorAll(
+        "[data-delete-att]"
+      )
+      .forEach(button => {
 
-        b.onclick = async () => {
+        button.onclick =
+          async () => {
 
-          if (
-            !confirm(
-              "Delete this attendance record?"
-            )
-          ) return;
+            if (
+              !confirm(
+                "Delete this attendance record?"
+              )
+            ) return;
 
-          await deleteDoc(
-            doc(
-              db,
-              "attendance",
-              b.dataset.deleteAtt
-            )
-          );
 
-          await openSection("attendance");
-        };
+            await deleteDoc(
+              doc(
+                db,
+                "attendance",
+                button.dataset
+                  .deleteAtt
+              )
+            );
+
+
+            await openSection(
+              "attendance"
+            );
+
+          };
+
       });
+
   };
 
 
-  $("attendanceSearch").oninput = draw;
+  $("attendanceSearch").oninput =
+    draw;
 
-  $("attendanceDate").onchange = draw;
+  $("attendanceDate").onchange =
+    draw;
+
 
   $("addAttendanceBtn").onclick =
     () =>
@@ -904,7 +1780,9 @@ function renderAttendance(rows) {
           $("attendanceDate").value
       });
 
+
   draw();
+
 }
 
 
@@ -913,7 +1791,14 @@ function showAttendanceForm(rec = null) {
   const f =
     $("attendanceForm");
 
-  f.classList.remove("hidden");
+  show("attendanceForm");
+
+
+  const defaultDate =
+    new Date()
+      .toISOString()
+      .slice(0, 10);
+
 
   f.innerHTML = `
 
@@ -925,25 +1810,30 @@ function showAttendanceForm(rec = null) {
       }
     </h4>
 
+
     <div class="formgrid">
 
       <div>
-        <label>Date / തീയതി</label>
+
+        <label>Date</label>
 
         <input
           id="aDate"
           type="date"
           value="${escapeAttr(
             rec?.date ||
-            new Date()
-              .toISOString()
-              .slice(0, 10)
+            defaultDate
           )}"
         >
+
       </div>
 
+
       <div>
-        <label>Student Number / നമ്പർ</label>
+
+        <label>
+          Student Number
+        </label>
 
         <input
           id="aStudentNo"
@@ -952,10 +1842,15 @@ function showAttendanceForm(rec = null) {
             rec?.studentId
           )}"
         >
+
       </div>
 
+
       <div>
-        <label>Student Name / പേര്</label>
+
+        <label>
+          Student Name
+        </label>
 
         <input
           id="aStudentName"
@@ -964,11 +1859,13 @@ function showAttendanceForm(rec = null) {
             rec?.name
           )}"
         >
+
       </div>
+
 
       <div>
 
-        <label>Status / ഹാജർ</label>
+        <label>Status</label>
 
         <select id="aStatus">
 
@@ -1009,18 +1906,22 @@ function showAttendanceForm(rec = null) {
 
       </div>
 
+
       <div>
 
-        <label>Remarks / കുറിപ്പ്</label>
+        <label>Remarks</label>
 
         <input
           id="aRemarks"
-          value="${escapeAttr(rec?.remarks)}"
+          value="${escapeAttr(
+            rec?.remarks
+          )}"
         >
 
       </div>
 
     </div>
+
 
     <div class="formactions">
 
@@ -1037,15 +1938,17 @@ function showAttendanceForm(rec = null) {
 
     </div>
 
+
     <div
       id="attendanceMsg"
       class="msg"
     ></div>
+
   `;
 
 
   $("cancelAttendance").onclick =
-    () => f.classList.add("hidden");
+    () => hide("attendanceForm");
 
 
   $("saveAttendance").onclick =
@@ -1076,6 +1979,7 @@ function showAttendanceForm(rec = null) {
 
         updatedAt:
           new Date().toISOString()
+
       };
 
 
@@ -1092,10 +1996,6 @@ function showAttendanceForm(rec = null) {
 
 
       try {
-
-        $("saveAttendance").disabled =
-          true;
-
 
         if (rec?.id) {
 
@@ -1121,10 +2021,13 @@ function showAttendanceForm(rec = null) {
                 new Date().toISOString()
             }
           );
+
         }
 
 
-        await openSection("attendance");
+        await openSection(
+          "attendance"
+        );
 
       } catch (e) {
 
@@ -1132,10 +2035,468 @@ function showAttendanceForm(rec = null) {
           "Save failed: " +
           (e.code || e.message);
 
-        $("saveAttendance").disabled =
-          false;
       }
+
     };
+
+}
+
+
+/* =========================
+   LEAVE
+========================= */
+
+function renderLeaveRequests(rows) {
+
+  $("panelBody").innerHTML = `
+
+    <div class="tablewrap">
+
+      <table>
+
+        <thead>
+
+          <tr>
+            <th>Student No.</th>
+            <th>Name</th>
+            <th>From</th>
+            <th>To</th>
+            <th>Reason</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+
+        </thead>
+
+        <tbody>
+
+          ${
+            rows.length
+
+              ? rows.map(r => `
+
+                <tr>
+
+                  <td>
+                    ${escapeHtml(
+                      r.studentNumber
+                    )}
+                  </td>
+
+                  <td>
+                    ${escapeHtml(
+                      r.studentName
+                    )}
+                  </td>
+
+                  <td>
+                    ${escapeHtml(
+                      r.fromDate
+                    )}
+                  </td>
+
+                  <td>
+                    ${escapeHtml(
+                      r.toDate
+                    )}
+                  </td>
+
+                  <td>
+                    ${escapeHtml(
+                      r.reason
+                    )}
+                  </td>
+
+                  <td>
+                    <b>
+                      ${escapeHtml(
+                        r.status ||
+                        "Pending"
+                      )}
+                    </b>
+                  </td>
+
+                  <td>
+
+                    ${
+                      (r.status ||
+                      "Pending") ===
+                      "Pending"
+
+                        ? `
+
+                          <button
+                            class="smallbtn"
+                            data-approve-leave="${escapeAttr(r.id)}"
+                          >
+                            Confirm
+                          </button>
+
+                          <button
+                            class="smallbtn danger"
+                            data-reject-leave="${escapeAttr(r.id)}"
+                          >
+                            Reject
+                          </button>
+
+                        `
+
+                        : escapeHtml(
+                            r.reviewRemark ||
+                            ""
+                          )
+
+                    }
+
+                  </td>
+
+                </tr>
+
+              `).join("")
+
+              : `
+
+                <tr>
+                  <td colspan="7">
+                    No leave requests yet.
+                  </td>
+                </tr>
+
+              `
+          }
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+
+
+  document
+    .querySelectorAll(
+      "[data-approve-leave]"
+    )
+    .forEach(button => {
+
+      button.onclick =
+        () =>
+          reviewLeave(
+            button.dataset
+              .approveLeave,
+            "Approved"
+          );
+
+    });
+
+
+  document
+    .querySelectorAll(
+      "[data-reject-leave]"
+    )
+    .forEach(button => {
+
+      button.onclick =
+        () =>
+          reviewLeave(
+            button.dataset
+              .rejectLeave,
+            "Rejected"
+          );
+
+    });
+
+}
+
+
+async function reviewLeave(
+  id,
+  status
+) {
+
+  const remark =
+    prompt(
+      status === "Rejected"
+        ? "Reason for rejection (optional):"
+        : "Review remark (optional):"
+    ) || "";
+
+
+  try {
+
+    await updateDoc(
+      doc(
+        db,
+        "leaveRequests",
+        id
+      ),
+      {
+        status,
+        reviewRemark: remark,
+        reviewedAt:
+          new Date().toISOString()
+      }
+    );
+
+
+    await openSection(
+      "leaveRequests"
+    );
+
+
+  } catch (e) {
+
+    alert(
+      "Update failed: " +
+      (e.code || e.message)
+    );
+
+  }
+
+}
+
+
+/* =========================
+   NOTICES
+========================= */
+
+function renderNotices(rows) {
+
+  $("panelBody").innerHTML = `
+
+    <div class="studentTools">
+
+      <button
+        id="addNoticeBtn"
+        class="primary"
+      >
+        ➕ Publish Notice
+      </button>
+
+    </div>
+
+
+    <div
+      id="noticeForm"
+      class="formbox hidden"
+    ></div>
+
+
+    <div id="noticeList"></div>
+
+  `;
+
+
+  const draw = () => {
+
+    $("noticeList").innerHTML =
+      rows.length
+
+        ? rows.map(r => `
+
+            <div
+              class="notice"
+              style="margin-bottom:10px"
+            >
+
+              <b>
+                ${escapeHtml(
+                  r.title ||
+                  "Notice"
+                )}
+              </b>
+
+              <div>
+                ${escapeHtml(
+                  r.message ||
+                  r.text ||
+                  ""
+                )}
+              </div>
+
+              <button
+                class="smallbtn danger"
+                data-delete-notice="${escapeAttr(r.id)}"
+              >
+                Delete
+              </button>
+
+            </div>
+
+          `).join("")
+
+        : "<div class='empty'>No notices yet.</div>";
+
+
+    document
+      .querySelectorAll(
+        "[data-delete-notice]"
+      )
+      .forEach(button => {
+
+        button.onclick =
+          async () => {
+
+            if (
+              !confirm(
+                "Delete this notice?"
+              )
+            ) return;
+
+
+            await deleteDoc(
+              doc(
+                db,
+                "notices",
+                button.dataset
+                  .deleteNotice
+              )
+            );
+
+
+            await openSection(
+              "notices"
+            );
+
+          };
+
+      });
+
+  };
+
+
+  $("addNoticeBtn").onclick =
+    () => {
+
+      show("noticeForm");
+
+
+      $("noticeForm").innerHTML = `
+
+        <h4>
+          ➕ Publish Notice
+        </h4>
+
+        <div class="formgrid">
+
+          <div>
+
+            <label>
+              Title
+            </label>
+
+            <input id="nTitle">
+
+          </div>
+
+
+          <div
+            style="grid-column:1/-1"
+          >
+
+            <label>
+              Message
+            </label>
+
+            <textarea
+              id="nMessage"
+            ></textarea>
+
+          </div>
+
+        </div>
+
+
+        <div class="formactions">
+
+          <button
+            id="saveNotice"
+            class="primary"
+          >
+            Publish
+          </button>
+
+          <button
+            id="cancelNotice"
+          >
+            Cancel
+          </button>
+
+        </div>
+
+
+        <div
+          id="noticeMsg"
+          class="msg"
+        ></div>
+
+      `;
+
+
+      $("cancelNotice").onclick =
+        () => hide("noticeForm");
+
+
+      $("saveNotice").onclick =
+        async () => {
+
+          const title =
+            $("nTitle")
+              .value
+              .trim();
+
+          const message =
+            $("nMessage")
+              .value
+              .trim();
+
+
+          if (!title || !message) {
+
+            $("noticeMsg").textContent =
+              "Title and message are required.";
+
+            return;
+          }
+
+
+          try {
+
+            await addDoc(
+              collection(
+                db,
+                "notices"
+              ),
+              {
+                title,
+                message,
+                createdAt:
+                  new Date()
+                    .toISOString()
+              }
+            );
+
+
+            await openSection(
+              "notices"
+            );
+
+          } catch (e) {
+
+            $("noticeMsg").textContent =
+              "Publish failed: " +
+              (e.code || e.message);
+
+          }
+
+        };
+
+    };
+
+
+  draw();
+
 }
 
 
@@ -1143,34 +2504,31 @@ function showAttendanceForm(rec = null) {
    PARENT DASHBOARD
 ========================= */
 
-async function renderParentDashboard(userData) {
+async function renderParentDashboard(
+  userData
+) {
 
   const linkedNumber =
     String(
-      userData.studentNumber || ""
+      userData.studentNumber ||
+      ""
     ).trim();
 
-  const body =
-    $("parentBody");
 
-
-  body.innerHTML = `
+  $("parentBody").innerHTML = `
 
     <div class="parentTools">
 
+      <b>
+        Parent Portal /
+        രക്ഷിതാക്കളുടെ പോർട്ടൽ
+      </b>
+
       <div>
-
-        <b>
-          Parent Portal /
-          രക്ഷിതാക്കളുടെ പോർട്ടൽ
-        </b>
-
-        <div style="margin-top:6px">
-          Student Number /
-          വിദ്യാർത്ഥി നമ്പർ
-        </div>
-
+        Student Number /
+        വിദ്യാർത്ഥി നമ്പർ
       </div>
+
 
       <div
         style="
@@ -1183,8 +2541,11 @@ async function renderParentDashboard(userData) {
         <input
           id="parentStudentNo"
           placeholder="Enter Student Number"
-          value="${escapeAttr(linkedNumber)}"
+          value="${escapeAttr(
+            linkedNumber
+          )}"
         >
+
 
         <button
           id="parentLookupBtn"
@@ -1195,12 +2556,14 @@ async function renderParentDashboard(userData) {
 
       </div>
 
+
       <div
         id="parentLookupMsg"
         class="msg"
       ></div>
 
     </div>
+
 
     <div id="parentContent">
 
@@ -1210,6 +2573,7 @@ async function renderParentDashboard(userData) {
       </div>
 
     </div>
+
   `;
 
 
@@ -1229,7 +2593,9 @@ async function renderParentDashboard(userData) {
       userData,
       linkedNumber
     );
+
   }
+
 }
 
 
@@ -1258,8 +2624,6 @@ async function loadParentStudent(
   }
 
 
-  msg.textContent = "";
-
   content.innerHTML =
     "<p>Loading...</p>";
 
@@ -1268,7 +2632,8 @@ async function loadParentStudent(
 
     const linked =
       String(
-        userData.studentNumber || ""
+        userData.studentNumber ||
+        ""
       ).trim();
 
 
@@ -1278,116 +2643,141 @@ async function loadParentStudent(
     ) {
 
       content.innerHTML = `
+
         <div class="empty">
+
           This Student Number is not
           linked to this parent account.
+
         </div>
+
       `;
 
       return;
     }
 
 
-    const [
-      studentSnap,
-      attendanceSnap,
-      studySnap,
-      resultsSnap,
-      noticesSnap,
-      leaveSnap
-    ] = await Promise.all([
-
-      getDocs(
+    const studentSnap =
+      await getDocs(
         query(
-          collection(db, "students"),
+          collection(
+            db,
+            "students"
+          ),
           where(
             "studentNumber",
             "==",
             studentNumber
           )
         )
-      ),
-
-      getDocs(
-        query(
-          collection(db, "attendance"),
-          where(
-            "studentNumber",
-            "==",
-            studentNumber
-          )
-        )
-      ),
-
-      getDocs(
-        query(
-          collection(db, "studyRecords"),
-          where(
-            "studentNumber",
-            "==",
-            studentNumber
-          )
-        )
-      ),
-
-      getDocs(
-        query(
-          collection(db, "results"),
-          where(
-            "studentNumber",
-            "==",
-            studentNumber
-          )
-        )
-      ),
-
-      getDocs(
-        collection(db, "notices")
-      ),
-
-      getDocs(
-        query(
-          collection(db, "leaveRequests"),
-          where(
-            "studentNumber",
-            "==",
-            studentNumber
-          )
-        )
-      )
-    ]);
+      );
 
 
     const studentDoc =
       studentSnap.docs[0];
 
 
-    const student =
-      studentDoc
-        ? {
-            id: studentDoc.id,
-            ...studentDoc.data()
-          }
-        : null;
-
-
-    if (!student) {
+    if (!studentDoc) {
 
       content.innerHTML = `
+
         <div class="empty">
 
           Student Number
           <b>
-            ${escapeHtml(studentNumber)}
+            ${escapeHtml(
+              studentNumber
+            )}
           </b>
-
           not found.
 
         </div>
+
       `;
 
       return;
     }
+
+
+    const student = {
+      id: studentDoc.id,
+      ...studentDoc.data()
+    };
+
+
+    const [
+      attendanceSnap,
+      studySnap,
+      resultsSnap,
+      noticesSnap,
+      leaveSnap
+    ] =
+      await Promise.all([
+
+        getDocs(
+          query(
+            collection(
+              db,
+              "attendance"
+            ),
+            where(
+              "studentNumber",
+              "==",
+              studentNumber
+            )
+          )
+        ),
+
+        getDocs(
+          query(
+            collection(
+              db,
+              "studyRecords"
+            ),
+            where(
+              "studentNumber",
+              "==",
+              studentNumber
+            )
+          )
+        ),
+
+        getDocs(
+          query(
+            collection(
+              db,
+              "results"
+            ),
+            where(
+              "studentNumber",
+              "==",
+              studentNumber
+            )
+          )
+        ),
+
+        getDocs(
+          collection(
+            db,
+            "notices"
+          )
+        ),
+
+        getDocs(
+          query(
+            collection(
+              db,
+              "leaveRequests"
+            ),
+            where(
+              "studentNumber",
+              "==",
+              studentNumber
+            )
+          )
+        )
+
+      ]);
 
 
     const attendance =
@@ -1398,10 +2788,13 @@ async function loadParentStudent(
         }))
         .sort(
           (a, b) =>
-            String(b.date || "")
-              .localeCompare(
-                String(a.date || "")
+            String(
+              b.date || ""
+            ).localeCompare(
+              String(
+                a.date || ""
               )
+            )
         )
         .slice(0, 15);
 
@@ -1426,13 +2819,6 @@ async function loadParentStudent(
           id: d.id,
           ...d.data()
         }))
-        .sort(
-          (a, b) =>
-            String(b.createdAt || "")
-              .localeCompare(
-                String(a.createdAt || "")
-              )
-        )
         .slice(0, 10);
 
 
@@ -1441,14 +2827,7 @@ async function loadParentStudent(
         .map(d => ({
           id: d.id,
           ...d.data()
-        }))
-        .sort(
-          (a, b) =>
-            String(b.appliedAt || "")
-              .localeCompare(
-                String(a.appliedAt || "")
-              )
-        );
+        }));
 
 
     content.innerHTML = `
@@ -1465,52 +2844,73 @@ async function loadParentStudent(
 
           <p>
             <b>Student No:</b>
-            ${escapeHtml(student.studentNumber)}
+            ${escapeHtml(
+              student.studentNumber
+            )}
           </p>
 
           <p>
             <b>Name:</b>
-            ${escapeHtml(student.name)}
+            ${escapeHtml(
+              student.name
+            )}
           </p>
 
           <p>
             <b>Parent:</b>
-            ${escapeHtml(student.parentName)}
+            ${escapeHtml(
+              student.parentName
+            )}
           </p>
 
           <p>
             <b>Class:</b>
-            ${escapeHtml(student.classBatch)}
+            ${escapeHtml(
+              student.classBatch
+            )}
           </p>
 
           <p>
             <b>Phone:</b>
-            ${escapeHtml(student.phone)}
+            ${escapeHtml(
+              student.phone
+            )}
           </p>
 
           <p>
             <b>Teacher:</b>
-            ${escapeHtml(student.assignedTeacher)}
+            ${escapeHtml(
+              student.assignedTeacher
+            )}
           </p>
 
           <p>
             <b>Address:</b>
-            ${escapeHtml(student.address)}
+            ${escapeHtml(
+              student.address
+            )}
           </p>
 
           <p>
             <b>Date of Birth:</b>
-            ${escapeHtml(student.dateOfBirth)}
+            ${escapeHtml(
+              student.dateOfBirth
+            )}
           </p>
 
           <p>
             <b>Admission Date:</b>
-            ${escapeHtml(student.admissionDate)}
+            ${escapeHtml(
+              student.admissionDate
+            )}
           </p>
 
           <p>
             <b>Status:</b>
-            ${escapeHtml(student.status || "Active")}
+            ${escapeHtml(
+              student.status ||
+              "Active"
+            )}
           </p>
 
         </div>
@@ -1525,6 +2925,7 @@ async function loadParentStudent(
 
           ${
             attendance.length
+
               ? readOnlyTableHtml(
                   attendance,
                   [
@@ -1533,6 +2934,7 @@ async function loadParentStudent(
                     "remarks"
                   ]
                 )
+
               : "<p>No attendance records.</p>"
           }
 
@@ -1548,12 +2950,18 @@ async function loadParentStudent(
 
           ${
             study.length
+
               ? readOnlyTableHtml(
                   study,
-                  Object.keys(study[0])
-                    .filter(k => k !== "id")
-                    .slice(0, 6)
+                  Object.keys(
+                    study[0]
+                  )
+                  .filter(
+                    k => k !== "id"
+                  )
+                  .slice(0, 6)
                 )
+
               : "<p>No study records.</p>"
           }
 
@@ -1569,12 +2977,18 @@ async function loadParentStudent(
 
           ${
             results.length
+
               ? readOnlyTableHtml(
                   results,
-                  Object.keys(results[0])
-                    .filter(k => k !== "id")
-                    .slice(0, 6)
+                  Object.keys(
+                    results[0]
+                  )
+                  .filter(
+                    k => k !== "id"
+                  )
+                  .slice(0, 6)
                 )
+
               : "<p>No results yet.</p>"
           }
 
@@ -1590,25 +3004,32 @@ async function loadParentStudent(
 
           ${
             notices.length
-              ? notices.map(n => `
-                  <div class="notice">
 
-                    <b>
-                      ${escapeHtml(
-                        n.title || "Notice"
-                      )}
-                    </b>
+              ? notices.map(
+                  n => `
 
-                    <div>
-                      ${escapeHtml(
-                        n.message ||
-                        n.text ||
-                        ""
-                      )}
+                    <div class="notice">
+
+                      <b>
+                        ${escapeHtml(
+                          n.title ||
+                          "Notice"
+                        )}
+                      </b>
+
+                      <div>
+                        ${escapeHtml(
+                          n.message ||
+                          n.text ||
+                          ""
+                        )}
+                      </div>
+
                     </div>
 
-                  </div>
-                `).join("")
+                  `
+                ).join("")
+
               : "<p>No notices.</p>"
           }
 
@@ -1622,18 +3043,20 @@ async function loadParentStudent(
             ലീവ്
           </h4>
 
+
           <button
             id="applyLeaveBtn"
             class="primary"
           >
-            ➕ Apply Leave /
-            ലീവ് അപേക്ഷിക്കുക
+            ➕ Apply Leave
           </button>
+
 
           <div
             id="leaveFormWrap"
             class="formbox hidden"
           ></div>
+
 
           <div class="tablewrap">
 
@@ -1656,46 +3079,60 @@ async function loadParentStudent(
                 ${
                   leaves.length
 
-                    ? leaves.map(x => `
-                        <tr>
+                    ? leaves.map(
+                        x => `
 
-                          <td>
-                            ${escapeHtml(x.fromDate)}
-                          </td>
+                          <tr>
 
-                          <td>
-                            ${escapeHtml(x.toDate)}
-                          </td>
-
-                          <td>
-                            ${escapeHtml(x.reason)}
-                          </td>
-
-                          <td>
-                            <b>
+                            <td>
                               ${escapeHtml(
-                                x.status ||
-                                "Pending"
+                                x.fromDate
                               )}
-                            </b>
-                          </td>
+                            </td>
 
-                          <td>
-                            ${escapeHtml(
-                              x.reviewRemark ||
-                              ""
-                            )}
-                          </td>
+                            <td>
+                              ${escapeHtml(
+                                x.toDate
+                              )}
+                            </td>
 
-                        </tr>
-                      `).join("")
+                            <td>
+                              ${escapeHtml(
+                                x.reason
+                              )}
+                            </td>
+
+                            <td>
+                              <b>
+                                ${escapeHtml(
+                                  x.status ||
+                                  "Pending"
+                                )}
+                              </b>
+                            </td>
+
+                            <td>
+                              ${escapeHtml(
+                                x.reviewRemark ||
+                                ""
+                              )}
+                            </td>
+
+                          </tr>
+
+                        `
+                      ).join("")
 
                     : `
+
                       <tr>
+
                         <td colspan="5">
                           No leave requests yet.
                         </td>
+
                       </tr>
+
                     `
                 }
 
@@ -1707,7 +3144,9 @@ async function loadParentStudent(
 
         </div>
 
+
       </div>
+
     `;
 
 
@@ -1718,22 +3157,28 @@ async function loadParentStudent(
           student.name
         );
 
+
   } catch (e) {
 
     console.error(e);
 
     content.innerHTML = `
+
       <div class="msg">
 
         Could not load parent data:
 
         ${escapeHtml(
-          e.code || e.message
+          e.code ||
+          e.message
         )}
 
       </div>
+
     `;
+
   }
+
 }
 
 
@@ -1746,7 +3191,8 @@ function readOnlyTableHtml(
   fields
 ) {
 
-  let h = `
+  let html = `
+
     <div class="tablewrap">
 
       <table>
@@ -1755,52 +3201,52 @@ function readOnlyTableHtml(
 
           <tr>
 
-            ${fields
-              .map(
+            ${
+              fields.map(
                 f =>
                   `<th>${escapeHtml(f)}</th>`
-              )
-              .join("")}
+              ).join("")
+            }
 
           </tr>
 
         </thead>
 
         <tbody>
+
   `;
 
 
-  for (const r of rows) {
+  rows.forEach(r => {
 
-    h += `
+    html += `
+
       <tr>
 
         ${
-          fields
-            .map(
-              f =>
-                `<td>${escapeHtml(r[f])}</td>`
-            )
-            .join("")
+          fields.map(
+            f =>
+              `<td>${escapeHtml(
+                r[f]
+              )}</td>`
+          ).join("")
         }
 
       </tr>
+
     `;
-  }
+
+  });
 
 
-  return h + `
-        </tbody>
+  return html +
+    "</tbody></table></div>";
 
-      </table>
-
-    </div>
-  `;
 }
 
 
 /* =========================
-   PARENT LEAVE
+   PARENT LEAVE FORM
 ========================= */
 
 function showParentLeaveForm(
@@ -1811,7 +3257,7 @@ function showParentLeaveForm(
   const w =
     $("leaveFormWrap");
 
-  w.classList.remove("hidden");
+  show("leaveFormWrap");
 
 
   w.innerHTML = `
@@ -1820,6 +3266,7 @@ function showParentLeaveForm(
       📝 Leave Application /
       ലീവ് അപേക്ഷ
     </h4>
+
 
     <div class="formgrid">
 
@@ -1836,6 +3283,7 @@ function showParentLeaveForm(
 
       </div>
 
+
       <div>
 
         <label>
@@ -1848,6 +3296,7 @@ function showParentLeaveForm(
         >
 
       </div>
+
 
       <div
         style="grid-column:1/-1"
@@ -1866,6 +3315,7 @@ function showParentLeaveForm(
 
     </div>
 
+
     <div class="formactions">
 
       <button
@@ -1883,13 +3333,165 @@ function showParentLeaveForm(
 
     </div>
 
+
     <div
       id="parentLeaveMsg"
       class="msg"
     ></div>
+
   `;
 
 
   $("cancelParentLeave").onclick =
-    () =>
-      w.classList.add("
+    () => hide("leaveFormWrap");
+
+
+  $("saveParentLeave").onclick =
+    async () => {
+
+      const fromDate =
+        $("pFrom").value;
+
+      const toDate =
+        $("pTo").value;
+
+      const reason =
+        $("pReason")
+          .value
+          .trim();
+
+
+      if (
+        !fromDate ||
+        !toDate ||
+        !reason
+      ) {
+
+        $("parentLeaveMsg").textContent =
+          "From date, To date and Reason are required.";
+
+        return;
+      }
+
+
+      if (toDate < fromDate) {
+
+        $("parentLeaveMsg").textContent =
+          "To date cannot be before From date.";
+
+        return;
+      }
+
+
+      try {
+
+        await addDoc(
+          collection(
+            db,
+            "leaveRequests"
+          ),
+          {
+
+            studentNumber,
+
+            studentName,
+
+            fromDate,
+
+            toDate,
+
+            reason,
+
+            status:
+              "Pending",
+
+            appliedAt:
+              new Date()
+                .toISOString(),
+
+            parentUid:
+              auth.currentUser?.uid ||
+              ""
+
+          }
+        );
+
+
+        $("parentLeaveMsg").textContent =
+          "✅ Leave application submitted.";
+
+
+      } catch (e) {
+
+        $("parentLeaveMsg").textContent =
+          "Submit failed: " +
+          (e.code || e.message);
+
+      }
+
+    };
+
+}
+
+
+/* =========================
+   GENERIC TABLE
+========================= */
+
+function tableHtml(
+  rows,
+  fields
+) {
+
+  let html = `
+
+    <div class="tablewrap">
+
+      <table>
+
+        <thead>
+
+          <tr>
+
+            ${
+              fields.map(
+                f =>
+                  `<th>${escapeHtml(f)}</th>`
+              ).join("")
+            }
+
+          </tr>
+
+        </thead>
+
+        <tbody>
+
+  `;
+
+
+  rows.forEach(r => {
+
+    html += `
+
+      <tr>
+
+        ${
+          fields.map(
+            f =>
+              `<td>${escapeHtml(
+                r[f]
+              )}</td>`
+          ).join("")
+        }
+
+      </tr>
+
+    `;
+
+  });
+
+
+  return html +
+    "</tbody></table></div>";
+
+}
