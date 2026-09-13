@@ -224,52 +224,113 @@ function tableHtml(rows,fields,collectionName){
 }
 
 
+// Teachers management
+function renderTeachers(rows){
+  let h = `
+    <div class="studentTools">
+      <button id="addTeacherBtn" class="primary">➕ Add Teacher</button>
+    </div>
+    <div id="teacherForm" class="formbox hidden"></div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Teacher ID</th><th>Name</th><th>Phone</th><th>Assigned Students</th><th>Action</th></tr></thead>
+      <tbody id="teacherList"></tbody>
+    </table></div>`;
+  $("panelBody").innerHTML = h;
+  drawTeachers(rows);
+  $("addTeacherBtn").onclick = () => showTeacherForm();
+}
 
-// Teachers CRUD
-function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));}
-async function loadTeachers(){
-  const body=document.getElementById("teachersBody"); if(!body)return;
-  try{
-    const snap=await getDocs(collection(db,"teachers"));
-    if(snap.empty){body.innerHTML='<tr><td colspan="5">No records yet.</td></tr>';return;}
-    body.innerHTML="";
-    snap.forEach(s=>{
-      const d=s.data()||{};
-      const ids=Array.isArray(d.assignedStudentIds)?d.assignedStudentIds.join(", "):(d.assignedStudents||"");
-      const tr=document.createElement("tr");
-      tr.innerHTML=`<td>${esc(d.teacherId)}</td><td>${esc(d.name||d.teacherName)}</td><td>${esc(d.phone)}</td><td>${esc(ids)}</td>
-      <td><button class="small edit-teacher" data-id="${s.id}">Edit</button>
-      <button class="small danger delete-teacher" data-id="${s.id}">Delete</button></td>`;
-      body.appendChild(tr);
-    });
-    body.querySelectorAll(".edit-teacher").forEach(b=>b.onclick=()=>editTeacher(b.dataset.id));
-    body.querySelectorAll(".delete-teacher").forEach(b=>b.onclick=()=>deleteTeacher(b.dataset.id));
-  }catch(e){body.innerHTML=`<tr><td colspan="5">Error: ${esc(e.message)}</td></tr>`;}
-}
-function openTeacherForm(d={},id=""){
-  document.getElementById("teacherFormWrap").classList.remove("hidden");
-  document.getElementById("teacherDocId").value=id;
-  document.getElementById("teacherId").value=d.teacherId||"";
-  document.getElementById("teacherName").value=d.name||d.teacherName||"";
-  document.getElementById("teacherPhone").value=d.phone||"";
-  const a=Array.isArray(d.assignedStudentIds)?d.assignedStudentIds:(d.assignedStudents||[]);
-  document.getElementById("teacherStudents").value=Array.isArray(a)?a.join(", "):a;
-}
-async function editTeacher(id){try{const s=await getDoc(doc(db,"teachers",id));if(s.exists())openTeacherForm(s.data(),id);}catch(e){alert(e.message);}}
-async function deleteTeacher(id){if(!confirm("Delete this teacher?"))return;try{await deleteDoc(doc(db,"teachers",id));loadTeachers();}catch(e){alert(e.message);}}
-document.addEventListener("DOMContentLoaded",()=>{
-  const a=document.getElementById("addTeacherBtn"),c=document.getElementById("cancelTeacherBtn"),f=document.getElementById("teacherForm");
-  if(a)a.onclick=()=>openTeacherForm();
-  if(c)c.onclick=()=>document.getElementById("teacherFormWrap").classList.add("hidden");
-  if(f)f.onsubmit=async e=>{
-    e.preventDefault();
-    const id=document.getElementById("teacherDocId").value.trim();
-    const payload={teacherId:document.getElementById("teacherId").value.trim(),name:document.getElementById("teacherName").value.trim(),phone:document.getElementById("teacherPhone").value.trim(),assignedStudentIds:document.getElementById("teacherStudents").value.split(",").map(x=>x.trim()).filter(Boolean),updatedAt:new Date().toISOString()};
-    if(!payload.teacherId||!payload.name){alert("Teacher ID and Teacher Name are required.");return;}
+function drawTeachers(rows){
+  const body = $("teacherList");
+  if(!rows.length){
+    body.innerHTML = `<tr><td colspan="5">No records yet.</td></tr>`;
+    return;
+  }
+  body.innerHTML = rows.map(r => {
+    const ids = Array.isArray(r.assignedStudentIds)
+      ? r.assignedStudentIds.join(", ")
+      : (r.assignedStudents || "");
+    return `<tr>
+      <td>${escapeHtml(r.teacherId || "")}</td>
+      <td>${escapeHtml(r.name || r.teacherName || "")}</td>
+      <td>${escapeHtml(r.phone || "")}</td>
+      <td>${escapeHtml(ids)}</td>
+      <td class="actions">
+        <button class="smallbtn" data-edit-teacher="${escapeHtml(r.id)}">Edit</button>
+        <button class="smallbtn danger" data-delete-teacher="${escapeHtml(r.id)}">Delete</button>
+      </td>
+    </tr>`;
+  }).join("");
+
+  document.querySelectorAll("[data-edit-teacher]").forEach(b => b.onclick = async () => {
+    const s = await getDoc(doc(db,"teachers",b.dataset.editTeacher));
+    if(s.exists()) showTeacherForm({id:s.id,...s.data()});
+  });
+
+  document.querySelectorAll("[data-delete-teacher]").forEach(b => b.onclick = async () => {
+    if(!confirm("Delete this teacher?")) return;
     try{
-      if(id)await updateDoc(doc(db,"teachers",id),payload);else{payload.createdAt=new Date().toISOString();await addDoc(collection(db,"teachers"),payload);}
-      f.reset();document.getElementById("teacherDocId").value="";document.getElementById("teacherFormWrap").classList.add("hidden");loadTeachers();
-    }catch(e){alert(e.message);}
+      await deleteDoc(doc(db,"teachers",b.dataset.deleteTeacher));
+      await openSection("teachers");
+    }catch(e){ alert("Delete failed: "+(e.code||e.message)); }
+  });
+}
+
+function showTeacherForm(teacher=null){
+  const f=$("teacherForm");
+  f.classList.remove("hidden");
+  f.innerHTML=`
+    <h4>${teacher ? "✏️ Edit Teacher" : "➕ Add Teacher"}</h4>
+    <div class="formgrid">
+      <div><label>Teacher ID / അധ്യാപക ID</label><input id="tId" value="${escapeAttr(teacher?.teacherId)}" placeholder="e.g. UST001"></div>
+      <div><label>Teacher Name / പേര്</label><input id="tName" value="${escapeAttr(teacher?.name || teacher?.teacherName)}"></div>
+      <div><label>Phone Number / ഫോൺ</label><input id="tPhone" value="${escapeAttr(teacher?.phone)}"></div>
+      <div><label>Assigned Students / വിദ്യാർത്ഥികൾ</label><input id="tStudents" value="${escapeAttr(Array.isArray(teacher?.assignedStudentIds) ? teacher.assignedStudentIds.join(", ") : (teacher?.assignedStudents || ""))}" placeholder="1001, 1002"></div>
+    </div>
+    <div class="formactions">
+      <button id="saveTeacher" class="primary">Save Teacher</button>
+      <button id="cancelTeacher">Cancel</button>
+    </div>
+    <div id="teacherFormMsg" class="msg"></div>`;
+
+  $("cancelTeacher").onclick=()=>f.classList.add("hidden");
+  $("saveTeacher").onclick=async()=>{
+    const payload={
+      teacherId:$("tId").value.trim(),
+      name:$("tName").value.trim(),
+      phone:$("tPhone").value.trim(),
+      assignedStudentIds:$("tStudents").value.split(",").map(x=>x.trim()).filter(Boolean),
+      updatedAt:new Date().toISOString()
+    };
+    if(!payload.teacherId||!payload.name){
+      $("teacherFormMsg").textContent="Teacher ID and Name are required.";
+      return;
+    }
+    $("saveTeacher").disabled=true;
+    try{
+      if(teacher) await updateDoc(doc(db,"teachers",teacher.id),payload);
+      else await addDoc(collection(db,"teachers"),{...payload,createdAt:new Date().toISOString()});
+      await openSection("teachers");
+    }catch(e){
+      $("teacherFormMsg").textContent="Save failed: "+(e.code||e.message);
+      $("saveTeacher").disabled=false;
+    }
   };
-  setTimeout(loadTeachers,1200);
-});
+}
+
+// Single integrated section opener
+openSection = async function(name){
+  $("panel").classList.remove("hidden");
+  $("panelTitle").textContent=labels[name]||name;
+  $("panelBody").innerHTML="<p>Loading...</p>";
+  try{
+    const rows=await getAll(name);
+    if(name==="students"){renderStudents(rows);return;}
+    if(name==="teachers"){renderTeachers(rows);return;}
+    $("panelBody").innerHTML=rows.length
+      ? tableHtml(rows,Object.keys(rows[0]).filter(k=>k!=="id").slice(0,6),name)
+      : "<div class='empty'>No records yet.</div>";
+  }catch(e){
+    $("panelBody").innerHTML="<p class='msg'>Error: "+escapeHtml(e.message||e.code)+"</p>";
+  }
+};
