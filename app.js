@@ -80,6 +80,8 @@ async function openSection(name){
   try{
     const rows=await getAll(name);
     if(name==="students"){renderStudents(rows);return;}
+    if(name==="teachers"){renderTeachers(rows);return;}
+    if(name==="attendance"){renderAttendance(rows);return;}
     $("panelBody").innerHTML=rows.length
       ? tableHtml(rows,Object.keys(rows[0]).filter(k=>k!=="id").slice(0,6),name)
       : "<div class='empty'>No records yet.</div>";
@@ -224,6 +226,83 @@ function tableHtml(rows,fields,collectionName){
 }
 
 
+
+// Attendance management
+function renderAttendance(rows){
+  const today=new Date().toISOString().slice(0,10);
+  const data=[...rows].sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")));
+  let h=`
+    <div class="studentTools">
+      <input id="attendanceSearch" placeholder="🔍 Student number or name">
+      <input id="attendanceDate" type="date" value="${today}">
+      <button id="addAttendanceBtn" class="primary">➕ Mark Attendance</button>
+    </div>
+    <div id="attendanceForm" class="formbox hidden"></div>
+    <div class="tablewrap"><table><thead><tr>
+      <th>Date</th><th>Student No.</th><th>Name</th><th>Status</th><th>Remarks</th><th>Action</th>
+    </tr></thead><tbody id="attendanceList"></tbody></table></div>`;
+  $("panelBody").innerHTML=h;
+  const draw=()=>{
+    const q=$("attendanceSearch").value.trim().toLowerCase();
+    const d=$("attendanceDate").value;
+    const filtered=data.filter(r=>
+      (!d || r.date===d) &&
+      (!q || String(r.studentNumber||"").toLowerCase().includes(q) || String(r.studentName||r.name||"").toLowerCase().includes(q)));
+    $("attendanceList").innerHTML=filtered.length ? filtered.map(r=>`<tr>
+      <td>${escapeHtml(r.date||"")}</td>
+      <td>${escapeHtml(r.studentNumber||r.studentId||"")}</td>
+      <td>${escapeHtml(r.studentName||r.name||"")}</td>
+      <td>${escapeHtml(r.status||"")}</td>
+      <td>${escapeHtml(r.remarks||"")}</td>
+      <td class="actions"><button class="smallbtn" data-edit-att="${escapeAttr(r.id)}">Edit</button>
+      <button class="smallbtn danger" data-delete-att="${escapeAttr(r.id)}">Delete</button></td>
+    </tr>`).join("") : `<tr><td colspan="6">No attendance records for this date.</td></tr>`;
+    document.querySelectorAll("[data-edit-att]").forEach(b=>b.onclick=async()=>{
+      const s=await getDoc(doc(db,"attendance",b.dataset.editAtt));
+      if(s.exists()) showAttendanceForm({id:s.id,...s.data()});
+    });
+    document.querySelectorAll("[data-delete-att]").forEach(b=>b.onclick=async()=>{
+      if(!confirm("Delete this attendance record?")) return;
+      await deleteDoc(doc(db,"attendance",b.dataset.deleteAtt));
+      await openSection("attendance");
+    });
+  };
+  $("attendanceSearch").oninput=draw;
+  $("attendanceDate").onchange=draw;
+  $("addAttendanceBtn").onclick=()=>showAttendanceForm({date:$("attendanceDate").value});
+  draw();
+}
+
+function showAttendanceForm(rec=null){
+  const f=$("attendanceForm");
+  f.classList.remove("hidden");
+  f.innerHTML=`<h4>${rec?.id?"✏️ Edit Attendance":"➕ Mark Attendance"}</h4>
+    <div class="formgrid">
+      <div><label>Date / തീയതി</label><input id="aDate" type="date" value="${escapeAttr(rec?.date||new Date().toISOString().slice(0,10))}"></div>
+      <div><label>Student Number / നമ്പർ</label><input id="aStudentNo" value="${escapeAttr(rec?.studentNumber||rec?.studentId)}" placeholder="1001"></div>
+      <div><label>Student Name / പേര്</label><input id="aStudentName" value="${escapeAttr(rec?.studentName||rec?.name)}"></div>
+      <div><label>Status / ഹാജർ</label><select id="aStatus">
+        <option value="Present" ${rec?.status==="Present"?"selected":""}>Present / ഹാജർ</option>
+        <option value="Absent" ${rec?.status==="Absent"?"selected":""}>Absent / ഹാജരില്ല</option>
+        <option value="Leave" ${rec?.status==="Leave"?"selected":""}>Leave / ലീവ്</option>
+      </select></div>
+      <div><label>Remarks / കുറിപ്പ്</label><input id="aRemarks" value="${escapeAttr(rec?.remarks)}"></div>
+    </div>
+    <div class="formactions"><button id="saveAttendance" class="primary">Save Attendance</button><button id="cancelAttendance">Cancel</button></div>
+    <div id="attendanceMsg" class="msg"></div>`;
+  $("cancelAttendance").onclick=()=>f.classList.add("hidden");
+  $("saveAttendance").onclick=async()=>{
+    const payload={date:$("aDate").value,studentNumber:$("aStudentNo").value.trim(),studentName:$("aStudentName").value.trim(),status:$("aStatus").value,remarks:$("aRemarks").value.trim(),updatedAt:new Date().toISOString()};
+    if(!payload.date||!payload.studentNumber){$("attendanceMsg").textContent="Date and Student Number are required.";return;}
+    try{
+      $("saveAttendance").disabled=true;
+      if(rec?.id) await updateDoc(doc(db,"attendance",rec.id),payload);
+      else await addDoc(collection(db,"attendance"),{...payload,createdAt:new Date().toISOString()});
+      await openSection("attendance");
+    }catch(e){$("attendanceMsg").textContent="Save failed: "+(e.code||e.message);$("saveAttendance").disabled=false;}
+  };
+}
+
 // Teachers management
 function renderTeachers(rows){
   let h = `
@@ -317,20 +396,3 @@ function showTeacherForm(teacher=null){
     }
   };
 }
-
-// Single integrated section opener
-openSection = async function(name){
-  $("panel").classList.remove("hidden");
-  $("panelTitle").textContent=labels[name]||name;
-  $("panelBody").innerHTML="<p>Loading...</p>";
-  try{
-    const rows=await getAll(name);
-    if(name==="students"){renderStudents(rows);return;}
-    if(name==="teachers"){renderTeachers(rows);return;}
-    $("panelBody").innerHTML=rows.length
-      ? tableHtml(rows,Object.keys(rows[0]).filter(k=>k!=="id").slice(0,6),name)
-      : "<div class='empty'>No records yet.</div>";
-  }catch(e){
-    $("panelBody").innerHTML="<p class='msg'>Error: "+escapeHtml(e.message||e.code)+"</p>";
-  }
-};
