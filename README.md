@@ -1,16 +1,19 @@
-# SAFA QURAN COLLEGE SUPPORT PORTAL – V6
+SAFA QURAN COLLEGE SUPPORT PORTAL – V7
+Admin role debugging build.
 
-V6 is a Firebase-connected diagnostic/admin build.
+Admin login:
+Email: basithchrkla@gmail.com
+Password: use the current Firebase Authentication password.
 
-## Important
-The portal authenticates with Firebase Authentication and then reads:
-`users/{SIGNED_IN_UID}`
-The field `role` must be exactly `admin`, `parent`, or `teacher`.
+This version displays the exact Firestore field keys and raw document data after login.
+If role is correctly stored as the string "admin", the Super Admin Dashboard will appear.
 
-V6 now displays the signed-in UID on the dashboard. This makes it easy to detect if the Firestore `users` document was created under a different UID after an email/account change.
+Files:
+index.html
+app.js
+style.css
+firebase-config.js
+firestore.rules
+README.md
 
-Admin example:
-- Email: basithchrkla@gmail.com
-- Password: your current Firebase Authentication password
-
-Do not share passwords. Do not put real student data into this development build until Firestore rules and all parent/teacher flows are reviewed.
+Do not put real student data into this development build until access rules are fully reviewed.

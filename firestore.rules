@@ -1,70 +1,19 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() {
-      return request.auth != null;
-    }
-    function userDoc() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid));
-    }
-    function role() {
-      return userDoc().data.role;
-    }
-    function admin() {
-      return signedIn() && userDoc().exists() && role() == 'admin';
-    }
-
+    function signedIn(){return request.auth != null;}
+    function userDoc(){return get(/databases/$(database)/documents/users/$(request.auth.uid));}
+    function isAdmin(){return signedIn() && userDoc().data.role == "admin";}
     match /users/{uid} {
-      allow read: if signedIn() && (request.auth.uid == uid || admin());
-      allow create, update, delete: if admin();
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow write: if isAdmin();
     }
-
-    match /students/{id} {
-      allow read: if admin()
-        || (signedIn() && role() == 'parent' && userDoc().data.studentId == id)
-        || (signedIn() && role() == 'teacher' && id in userDoc().data.assignedStudentIds);
-      allow write: if admin();
-    }
-
-    match /teachers/{id} {
-      allow read, write: if admin();
-    }
-
-    match /attendance/{id} {
-      allow read: if admin()
-        || (signedIn() && role() in ['parent','teacher']);
-      allow write: if admin()
-        || (signedIn() && role() == 'teacher');
-    }
-
-    match /studyRecords/{id} {
-      allow read: if admin()
-        || (signedIn() && role() in ['parent','teacher']);
-      allow write: if admin()
-        || (signedIn() && role() == 'teacher');
-    }
-
-    match /leaveRequests/{id} {
-      allow read: if admin()
-        || (signedIn() && role() in ['parent','teacher']);
-      allow write: if admin()
-        || (signedIn() && role() in ['parent','teacher']);
-    }
-
-    match /results/{id} {
-      allow read: if admin()
-        || (signedIn() && role() in ['parent','teacher']);
-      allow write: if admin()
-        || (signedIn() && role() == 'teacher');
-    }
-
-    match /notices/{id} {
-      allow read: if signedIn();
-      allow write: if admin();
-    }
-
-    match /{document=**} {
-      allow read, write: if false;
-    }
+    match /students/{id}{allow read,write: if isAdmin();}
+    match /teachers/{id}{allow read,write: if isAdmin();}
+    match /attendance/{id}{allow read,write: if isAdmin();}
+    match /studyRecords/{id}{allow read,write: if isAdmin();}
+    match /leaveRequests/{id}{allow read,write: if isAdmin();}
+    match /results/{id}{allow read,write: if isAdmin();}
+    match /notices/{id}{allow read: if signedIn(); allow write: if isAdmin();}
   }
 }

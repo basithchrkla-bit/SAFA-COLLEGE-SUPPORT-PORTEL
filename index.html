@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ml">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -7,62 +7,48 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="wrap">
 <header>
-  <h1>SAFA QURAN COLLEGE SUPPORT PORTAL</h1>
-  <p>സഫ ഖുർആൻ കോളേജ്</p>
+<h1>SAFA QURAN COLLEGE<br>SUPPORT PORTAL</h1>
+<p>സഫ ഖുർആൻ കോളേജ്</p>
 </header>
-
+<main>
 <section id="login" class="card">
-  <h2>Login / ലോഗിൻ</h2>
-  <input id="email" type="email" placeholder="Email">
-  <input id="password" type="password" placeholder="Password">
-  <button id="loginBtn">Login</button>
-  <p id="msg" class="msg"></p>
+<h2>Login</h2>
+<input id="email" type="email" placeholder="Email">
+<input id="password" type="password" placeholder="Password">
+<button id="loginBtn">Login</button>
+<div id="msg" class="msg"></div>
 </section>
 
 <section id="dash" class="card hidden">
-  <div class="top">
-    <div>
-      <h2 id="dashTitle">Dashboard</h2>
-      <p id="user" class="muted"></p><p id="uid" class="muted uid"></p><p id="status" class="muted"></p>
-    </div>
-    <button id="logout" class="secondary">Logout</button>
-  </div>
+<div class="top"><div><h2 id="dashTitle">Dashboard</h2><div id="user"></div></div><button id="logout">Logout</button></div>
+<div id="uid" class="muted"></div>
+<div id="status" class="status"></div>
+<div id="debug" class="debug hidden"></div>
 
-  <div id="admin" class="hidden">
-    <h3>Super Admin / സൂപ്പർ അഡ്മിൻ</h3>
-    <div class="grid">
-      <button data-section="students">👨‍🎓 Students</button>
-      <button data-section="teachers">👨‍🏫 Teachers</button>
-      <button data-section="attendance">📅 Attendance</button>
-      <button data-section="studyRecords">📖 Study</button>
-      <button data-section="leaveRequests">📝 Leave</button>
-      <button data-section="results">🏆 Results</button>
-      <button data-section="notices">📢 Notices</button>
-      <button data-section="users">🔐 Users</button>
-    </div>
-
-    <div id="panel" class="panel hidden">
-      <div class="panel-head">
-        <h3 id="panelTitle"></h3>
-        <button id="closePanel" class="secondary">Close</button>
-      </div>
-      <div id="panelBody"></div>
-    </div>
-  </div>
-
-  <div id="parent" class="hidden">
-    <h3>Parent / രക്ഷിതാവ്</h3>
-    <p>Parent dashboard connection will be added after the student records are configured.</p>
-  </div>
-
-  <div id="teacher" class="hidden">
-    <h3>Teacher / അധ്യാപകൻ</h3>
-    <p>Teacher dashboard connection will be added after teacher assignments are configured.</p>
-  </div>
-</section>
+<div id="admin" class="hidden">
+<h3>Super Admin / സൂപ്പർ അഡ്മിൻ</h3>
+<div class="grid">
+<button data-section="students">👨‍🎓 Students</button>
+<button data-section="teachers">👨‍🏫 Teachers</button>
+<button data-section="attendance">📅 Attendance</button>
+<button data-section="studyRecords">📖 Study</button>
+<button data-section="leaveRequests">📝 Leave</button>
+<button data-section="results">🏆 Results</button>
+<button data-section="notices">📢 Notices</button>
+<button data-section="users">🔐 Users</button>
 </div>
+</div>
+
+<div id="parent" class="hidden"><h3>Parent Dashboard</h3></div>
+<div id="teacher" class="hidden"><h3>Teacher Dashboard</h3></div>
+
+<div id="panel" class="panel hidden">
+<div class="top"><h3 id="panelTitle"></h3><button id="closePanel">Close</button></div>
+<div id="panelBody"></div>
+</div>
+</section>
+</main>
 <script type="module" src="app.js"></script>
 </body>
 </html>
