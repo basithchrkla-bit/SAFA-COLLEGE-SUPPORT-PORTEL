@@ -53,6 +53,7 @@ if(role==="admin"){
       $("status").textContent="Role detected: parent";
       $("dashTitle").textContent="Parent Dashboard";
       $("parent").classList.remove("hidden");
+      await renderParentDashboard(data);
     }else if(role==="teacher"){
       $("status").textContent="Role detected: teacher";
       $("dashTitle").textContent="Teacher Dashboard";
@@ -82,6 +83,7 @@ async function openSection(name){
     if(name==="students"){renderStudents(rows);return;}
     if(name==="teachers"){renderTeachers(rows);return;}
     if(name==="attendance"){renderAttendance(rows);return;}
+    if(name==="leaveRequests"){renderLeaveRequests(rows);return;}
     $("panelBody").innerHTML=rows.length
       ? tableHtml(rows,Object.keys(rows[0]).filter(k=>k!=="id").slice(0,6),name)
       : "<div class='empty'>No records yet.</div>";
@@ -302,6 +304,62 @@ function showAttendanceForm(rec=null){
     }catch(e){$("attendanceMsg").textContent="Save failed: "+(e.code||e.message);$("saveAttendance").disabled=false;}
   };
 }
+
+
+// Parent portal
+async function renderParentDashboard(userData){
+  const studentNumber=String(userData.studentNumber||"").trim();
+  const body=$("parentBody");
+  if(!studentNumber){ body.innerHTML=`<div class="empty">Student Number is not linked to this parent account.<br>Ask the Super Admin to set <b>studentNumber</b> in your users document.</div>`; return; }
+  body.innerHTML=`<div class="parentTools"><div><b>Student Number / വിദ്യാർത്ഥി നമ്പർ:</b> ${escapeHtml(studentNumber)}</div><button id="refreshParent" class="primary">🔄 Refresh</button></div><div id="parentContent">Loading...</div>`;
+  $("refreshParent").onclick=()=>renderParentDashboard(userData);
+  try{
+    const [ss,att,study,res,notices,leaves]=await Promise.all([
+      getDocs(collection(db,"students")),getDocs(collection(db,"attendance")),getDocs(collection(db,"studyRecords")),getDocs(collection(db,"results")),getDocs(collection(db,"notices")),getDocs(collection(db,"leaveRequests"))
+    ]);
+    const student=ss.docs.map(d=>({id:d.id,...d.data()})).find(x=>String(x.studentNumber||"").trim()===studentNumber);
+    const own=x=>String(x.studentNumber||x.studentId||"").trim()===studentNumber;
+    const A=att.docs.map(d=>({id:d.id,...d.data()})).filter(own).sort((a,b)=>String(b.date||"").localeCompare(String(a.date||""))).slice(0,15);
+    const S=study.docs.map(d=>({id:d.id,...d.data()})).filter(own);
+    const R=res.docs.map(d=>({id:d.id,...d.data()})).filter(own);
+    const N=notices.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||""))).slice(0,10);
+    const L=leaves.docs.map(d=>({id:d.id,...d.data()})).filter(own).sort((a,b)=>String(b.appliedAt||"").localeCompare(String(a.appliedAt||"")));
+    if(!student){body.querySelector('#parentContent').innerHTML=`<div class="empty">Student Number <b>${escapeHtml(studentNumber)}</b> not found.</div>`;return;}
+    body.querySelector('#parentContent').innerHTML=`
+      <div class="parentCards">
+        <div class="pcard"><h4>👤 Profile / വ്യക്തിഗത വിവരങ്ങൾ</h4><p><b>Name:</b> ${escapeHtml(student.name)}</p><p><b>Parent:</b> ${escapeHtml(student.parentName)}</p><p><b>Class:</b> ${escapeHtml(student.classBatch)}</p><p><b>Phone:</b> ${escapeHtml(student.phone)}</p><p><b>Teacher:</b> ${escapeHtml(student.assignedTeacher)}</p><p><b>Status:</b> ${escapeHtml(student.status||"Active")}</p></div>
+        <div class="pcard"><h4>📅 Attendance / ഹാജർ</h4>${A.length?tableHtml(A,["date","status","remarks"],"attendance"):"<p>No attendance records.</p>"}</div>
+        <div class="pcard"><h4>📖 Study / പഠന പുരോഗതി</h4>${S.length?tableHtml(S,Object.keys(S[0]).filter(k=>k!=="id").slice(0,6),"studyRecords"):"<p>No study records.</p>"}</div>
+        <div class="pcard"><h4>🏆 Results / റിസൾട്ട്</h4>${R.length?tableHtml(R,Object.keys(R[0]).filter(k=>k!=="id").slice(0,6),"results"):"<p>No results yet.</p>"}</div>
+        <div class="pcard"><h4>📢 Notices / അറിയിപ്പുകൾ</h4>${N.length?N.map(n=>`<div class="notice"><b>${escapeHtml(n.title||"Notice")}</b><div>${escapeHtml(n.message||n.text||"")}</div></div>`).join(""):"<p>No notices.</p>"}</div>
+        <div class="pcard"><h4>📝 Leave / ലീവ്</h4><button id="applyLeaveBtn" class="primary">➕ Apply Leave / ലീവ് അപേക്ഷിക്കുക</button><div id="leaveFormWrap" class="formbox hidden"></div><div class="tablewrap"><table><thead><tr><th>From</th><th>To</th><th>Reason</th><th>Status</th><th>Review</th></tr></thead><tbody>${L.length?L.map(x=>`<tr><td>${escapeHtml(x.fromDate)}</td><td>${escapeHtml(x.toDate)}</td><td>${escapeHtml(x.reason)}</td><td><b>${escapeHtml(x.status||"Pending")}</b></td><td>${escapeHtml(x.reviewRemark||"")}</td></tr>`).join(""):"<tr><td colspan='5'>No leave requests yet.</td></tr>"}</tbody></table></div></div>
+      </div>`;
+    $("applyLeaveBtn").onclick=()=>showParentLeaveForm(studentNumber,student.name);
+  }catch(e){body.querySelector('#parentContent').innerHTML=`<div class="msg">Could not load parent data: ${escapeHtml(e.code||e.message)}</div>`;}
+}
+
+function showParentLeaveForm(studentNumber,studentName){
+  const w=$("leaveFormWrap");w.classList.remove("hidden");w.innerHTML=`<h4>📝 Leave Application / ലീവ് അപേക്ഷ</h4><div class="formgrid"><div><label>From Date</label><input id="pFrom" type="date"></div><div><label>To Date</label><input id="pTo" type="date"></div><div style="grid-column:1/-1"><label>Reason / കാരണം</label><textarea id="pReason" placeholder="Reason for leave"></textarea></div></div><div class="formactions"><button id="saveParentLeave" class="primary">Submit Leave</button><button id="cancelParentLeave">Cancel</button></div><div id="parentLeaveMsg" class="msg"></div>`;
+  $("cancelParentLeave").onclick=()=>w.classList.add("hidden");
+  $("saveParentLeave").onclick=async()=>{
+    const from=$("pFrom").value,to=$("pTo").value,reason=$("pReason").value.trim();
+    if(!from||!to||!reason){$("parentLeaveMsg").textContent="From date, To date and Reason are required.";return;}
+    if(to<from){$("parentLeaveMsg").textContent="To date cannot be before From date.";return;}
+    try{await addDoc(collection(db,"leaveRequests"),{studentNumber,studentName,fromDate:from,toDate:to,reason,status:"Pending",appliedAt:new Date().toISOString(),reviewedAt:"",reviewedBy:"",reviewRemark:""});await renderParentDashboard({studentNumber});}
+    catch(e){$("parentLeaveMsg").textContent="Submit failed: "+(e.code||e.message);}
+  };
+}
+
+function renderLeaveRequests(rows){
+  const data=[...rows].sort((a,b)=>String(b.appliedAt||"").localeCompare(String(a.appliedAt||"")));
+  let h=`<div class="studentTools"><input id="leaveSearch" placeholder="🔍 Student number or name"><select id="leaveFilter"><option value="">All</option><option>Pending</option><option>Approved</option><option>Rejected</option></select></div><div class="tablewrap"><table><thead><tr><th>Student</th><th>From</th><th>To</th><th>Reason</th><th>Status</th><th>Action</th></tr></thead><tbody id="leaveList"></tbody></table></div>`;
+  $("panelBody").innerHTML=h;
+  const draw=()=>{const q=$("leaveSearch").value.trim().toLowerCase(),f=$("leaveFilter").value;const rows2=data.filter(x=>(!q||String(x.studentNumber||"").toLowerCase().includes(q)||String(x.studentName||"").toLowerCase().includes(q))&&(!f||x.status===f));$("leaveList").innerHTML=rows2.length?rows2.map(x=>`<tr><td>${escapeHtml(x.studentNumber)}<br>${escapeHtml(x.studentName)}</td><td>${escapeHtml(x.fromDate)}</td><td>${escapeHtml(x.toDate)}</td><td>${escapeHtml(x.reason)}</td><td><b>${escapeHtml(x.status||"Pending")}</b></td><td>${x.status==="Pending"?`<button class="smallbtn" data-approve-leave="${escapeAttr(x.id)}">✅ Confirm</button><button class="smallbtn danger" data-reject-leave="${escapeAttr(x.id)}">❌ Reject</button>`:`<span>${escapeHtml(x.reviewRemark||"")}</span>`}</td></tr>`).join(""):"<tr><td colspan='6'>No leave requests.</td></tr>";
+    document.querySelectorAll('[data-approve-leave]').forEach(b=>b.onclick=()=>reviewLeave(b.dataset.approveLeave,"Approved"));
+    document.querySelectorAll('[data-reject-leave]').forEach(b=>b.onclick=()=>reviewLeave(b.dataset.rejectLeave,"Rejected"));};
+  $("leaveSearch").oninput=draw;$("leaveFilter").onchange=draw;draw();
+}
+async function reviewLeave(id,status){const remark=prompt(status==="Approved"?"Optional confirmation note":"Reason for rejection (optional)","");if(remark===null)return;try{await updateDoc(doc(db,"leaveRequests",id),{status,reviewRemark:remark,reviewedAt:new Date().toISOString(),reviewedBy:auth.currentUser?.email||auth.currentUser?.uid||"admin"});await openSection("leaveRequests");}catch(e){alert("Update failed: "+(e.code||e.message));}}
 
 // Teachers management
 function renderTeachers(rows){
