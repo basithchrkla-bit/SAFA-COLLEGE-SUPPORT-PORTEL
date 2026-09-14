@@ -1,9 +1,1 @@
-export const firebaseConfig = {
-  apiKey: "AIzaSyBfLif63djNkovXOr0S5mLDjMlWPtoU2OA",
-  authDomain: "safa-support-portel.firebaseapp.com",
-  projectId: "safa-support-portel",
-  storageBucket: "safa-support-portel.firebasestorage.app",
-  messagingSenderId: "1073530810130",
-  appId: "1:1073530810130:web:986aa92dbc747d29390dcb",
-  measurementId: "G-DH6PL2CTGK"
-};
+export const firebaseConfig={apiKey:"AIzaSyBfLif63djNkovxOR0S5mLDjMlWPtoU2OA",authDomain:"safa-support-portel.firebaseapp.com",projectId:"safa-support-portel",storageBucket:"safa-support-portel.firebasestorage.app",messagingSenderId:"1073530810130",appId:"1:1073530810130:web:986aa92dbc747d29390dcb",measurementId:"G-DH6PL2CTGK"};

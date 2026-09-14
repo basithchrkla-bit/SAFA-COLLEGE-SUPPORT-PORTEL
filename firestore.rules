@@ -1,19 +1,16 @@
 rules_version = '2';
 service cloud.firestore {
  match /databases/{database}/documents {
-  function signedIn(){return request.auth != null;}
-  function userDoc(){return get(/databases/$(database)/documents/users/$(request.auth.uid));}
-  function isAdmin(){return signedIn() && userDoc().data.role=="admin";}
-  function isParent(){return signedIn() && userDoc().data.role=="parent";}
-  function isTeacher(){return signedIn() && userDoc().data.role=="teacher";}
-  function parentOwns(){return isParent() && resource.data.studentNumber==userDoc().data.studentNumber;}
-  match /users/{uid}{allow read: if signedIn() && (request.auth.uid==uid || isAdmin());allow write: if isAdmin();}
-  match /students/{id}{allow read: if isAdmin()||parentOwns()||isTeacher();allow write: if isAdmin();}
-  match /teachers/{id}{allow read,write: if isAdmin();}
-  match /attendance/{id}{allow read: if isAdmin()||parentOwns()||isTeacher();allow write: if isAdmin()||isTeacher();}
-  match /studyRecords/{id}{allow read: if isAdmin()||parentOwns()||isTeacher();allow write: if isAdmin()||isTeacher();}
-  match /results/{id}{allow read: if isAdmin()||parentOwns()||isTeacher();allow write: if isAdmin()||isTeacher();}
-  match /leaveRequests/{id}{allow read: if isAdmin()||parentOwns()||isTeacher();allow create: if isAdmin()||(isParent()&&request.resource.data.studentNumber==userDoc().data.studentNumber&&request.resource.data.status=="Pending");allow update: if isAdmin();}
-  match /notices/{id}{allow read: if signedIn();allow write: if isAdmin();}
+  function signedIn(){return request.auth!=null;}
+  function user(){return get(/databases/$(database)/documents/users/$(request.auth.uid));}
+  function admin(){return signedIn() && user().data.role=="admin";}
+  function parent(){return signedIn() && user().data.role=="parent";}
+  function own(d){return parent() && d.studentNumber==user().data.studentNumber;}
+  match /users/{uid}{allow read: if signedIn()&&(request.auth.uid==uid||admin());allow create,update,delete: if admin();}
+  match /students/{id}{allow read: if admin()||own(resource.data);allow create,update,delete: if admin();}
+  match /results/{id}{allow read: if admin()||own(resource.data);allow create,update,delete: if admin();}
+  match /notices/{id}{allow read: if signedIn();allow create,update,delete: if admin();}
+  match /leaveRequests/{id}{allow read: if admin()||own(resource.data);allow create: if admin()||(parent()&&request.resource.data.studentNumber==user().data.studentNumber&&request.resource.data.parentUid==request.auth.uid);allow update,delete: if admin();}
+  match /parentMessages/{id}{allow read: if admin()||own(resource.data);allow create: if admin()||(parent()&&request.resource.data.studentNumber==user().data.studentNumber&&request.resource.data.parentUid==request.auth.uid);allow update: if admin()||own(resource.data);allow delete: if admin()||own(resource.data);}
  }
 }
